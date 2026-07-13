@@ -8,33 +8,11 @@ CONFIG_DIR=/data/adb/tricky_store
 INDICATOR="$CONFIG_DIR/indicator.txt"
 TIMEOUT=8
 
-BB=""
-for p in /data/adb/modules/busybox-ndk/system/*/busybox /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox; do
-    [ -f "$p" ] && BB="$p" && break
-done
-
-SELF_DIR=$(cd "${0%/*}" 2>/dev/null && pwd)
 MODPATH="${MODPATH:-/data/adb/modules/tricky_store}"
-[ -z "$SELF_DIR" ] && SELF_DIR="$MODPATH"
+[ -f "$MODPATH/common_func.sh" ] && . "$MODPATH/common_func.sh"
 
-case "$(uname -m)" in
-    aarch64)       SF_ABI=arm64-v8a ;;
-    armv7*|armv8l) SF_ABI=armeabi-v7a ;;
-    *)             SF_ABI="" ;;
-esac
-ASFETCH="$SELF_DIR/bin/$SF_ABI/asfetch"
-
-if [ -n "$SF_ABI" ] && [ -x "$ASFETCH" ]; then
-    fetch="$ASFETCH -T $TIMEOUT"
-elif command -v curl >/dev/null 2>&1; then
-    fetch="curl -fsSL --max-time $TIMEOUT"
-elif [ -n "$BB" ]; then
-    fetch="$BB wget -q -T $TIMEOUT -O -"
-elif command -v wget >/dev/null 2>&1; then
-    fetch="wget -q -T $TIMEOUT -O -"
-else
-    exit 2
-fi
+fetch=$(resolve_fetcher "$TIMEOUT")
+[ -z "$fetch" ] && exit 2
 
 new=$($fetch "$URL" 2>/dev/null | tr -d '\r\n' | head -c 64)
 [ -z "$new" ] && exit 3
@@ -45,3 +23,4 @@ old=$(cat "$INDICATOR" 2>/dev/null)
 
 mkdir -p "$CONFIG_DIR"
 echo "$new" > "$INDICATOR"
+
