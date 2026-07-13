@@ -1,9 +1,5 @@
 name: Release
 
-# Tag a version (e.g. `git tag v1.0.1 && git push origin v1.0.1`) and this
-# builds the installable zip on GitHub's runners and attaches it to the
-# release. The zip is produced from source here — it is never uploaded by hand.
-
 on:
   push:
     tags:
@@ -23,20 +19,23 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zip unzip python3
 
       - name: Use committed native binaries (skip the cargo-ndk step in CI)
-        # native/*/prebuilt/<abi>/* are committed; touching them newer than the
-        # sources makes build.sh package them as-is instead of needing Rust+NDK.
         run: find native -path '*/prebuilt/*' -type f -exec touch {} +
 
       - name: Stamp version from tag
         run: |
           TAG="${{ github.ref_name }}"
-          # Strip leading 'v' if present
           VER="${TAG#v}"
+          VC="${VER//./}"
+          if echo "$VC" | grep -q '[^0-9]'; then
+            echo "::error::versionCode derived from tag '$TAG' is non-numeric: '$VC'"
+            echo "Tag must be a clean semver like v1.0.2. Got: $TAG"
+            exit 1
+          fi
           sed -i "s/^version=.*/version=${TAG}/" module/module.prop
-          sed -i "s/^versionCode=.*/versionCode=${VER//./}/" module/module.prop
+          sed -i "s/^versionCode=.*/versionCode=${VC}/" module/module.prop
           sed -i 's/"version": ".*"/"version": "'"${TAG}"'"/' update.json
-          sed -i 's/"versionCode": [0-9]*/"versionCode": '"${VER//./}"'/' update.json
-          echo "Stamped version: ${TAG} (code: ${VER//./})"
+          sed -i 's/"versionCode": [0-9]*/"versionCode": '"${VC}"'/' update.json
+          echo "Stamped version: ${TAG} (code: ${VC})"
 
       - name: Build module zip
         env:
@@ -45,11 +44,15 @@ jobs:
 
       - name: Release notes from CHANGELOG
         run: |
-          awk -v v="## ${GITHUB_REF_NAME}" '
-            $0==v {f=1; next}
-            /^## / {f=0}
-            f {print}
-          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ -f CHANGELOG.md ]; then
+            awk -v v="## ${GITHUB_REF_NAME}" '
+              $0==v {f=1; next}
+              /^## / {f=0}
+              f {print}
+            ' CHANGELOG.md > RELEASE_NOTES.md
+          else
+            echo "CHANGELOG.md not found — empty release notes." > RELEASE_NOTES.md
+          fi
           echo "----- notes -----"; cat RELEASE_NOTES.md
 
       - name: Create stable-named copy for update.json
