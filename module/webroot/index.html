@@ -52,6 +52,7 @@ h1{
 }
 
 /* ---------------- status pill ---------------- */
+.status[hidden]{display:none!important}
 .status{
   display:flex;align-items:center;justify-content:space-between;
   margin:0 0 22px;padding:14px 16px;
@@ -207,7 +208,7 @@ h1{
     <span class="status-dot" id="statusDot"></span>
     <span data-i="status">Keybox status</span>
   </span>
-  <span class="status-val" id="statusVal">—</span>
+  <span class="status-val" id="statusVal"></span>
 </div>
 
 <div class="lbl" data-i="auto">Auto-update</div>
