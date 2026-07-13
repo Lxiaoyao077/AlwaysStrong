@@ -76,9 +76,9 @@ if [ -f "$MODPATH/autopif.sh" ]; then
         || { sleep 2; run_autopif_quick >>"$CONFIG_DIR/autopif.log" 2>&1 || FP_OK=0; }
 fi
 
-# --- enforce STRONG-friendly spoof settings on every pif variant ----------
-for f in "$MODPATH/custom.pif.prop" "$MODPATH/pif.prop" \
-         "$CONFIG_DIR/custom.pif.prop" "$CONFIG_DIR/pif.prop"; do
+# --- enforce STRONG-friendly spoof settings on CONFIG_DIR pif variants --
+# Never touch MODPATH files — KSU hashes them at install, any write = tampered.
+for f in "$CONFIG_DIR/custom.pif.prop" "$CONFIG_DIR/pif.prop"; do
     [ -f "$f" ] || continue
     for kv in spoofProvider=0 spoofVendingFinger=1 spoofBuild=1 \
               spoofProps=1 spoofSignature=0 spoofVendingSdk=0; do
