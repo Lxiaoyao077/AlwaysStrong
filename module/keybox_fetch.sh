@@ -30,27 +30,10 @@ fi
 # TLS stalls mid-stream on some CDNs (the keybox mirror included) even though
 # the same wget downloads from Google/GitHub fine — so curl-less devices can't
 # pull the keybox at all. asfetch speaks TLS 1.2/1.3 correctly on every ABI.
-SELF_DIR=$(cd "${0%/*}" 2>/dev/null && pwd)
-[ -z "$SELF_DIR" ] && SELF_DIR=/data/adb/modules/tricky_store
-case "$(uname -m)" in
-    aarch64)        ABI=arm64-v8a ;;
-    armv7*|armv8l)  ABI=armeabi-v7a ;;
-    *)              ABI="" ;;  # Only ARM binaries are built — x86 falls through to curl/wget
-esac
-ASFETCH="$SELF_DIR/bin/$ABI/asfetch"
+MODPATH="${MODPATH:-/data/adb/modules/tricky_store}"
+[ -f "$MODPATH/common_func.sh" ] && . "$MODPATH/common_func.sh"
 
-DL=""
-if [ -n "$ABI" ] && [ -x "$ASFETCH" ]; then
-    DL="$ASFETCH -T 30 -o"
-elif command -v curl >/dev/null 2>&1; then
-    DL="curl -fsSL --connect-timeout 10 --max-time 30 -o"
-elif command -v wget >/dev/null 2>&1; then
-    DL="wget -q -T 20 -O"
-else
-    for bb in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox; do
-        if [ -x "$bb" ]; then DL="$bb wget -q -T 20 -O"; break; fi
-    done
-fi
+DL=$(resolve_fetcher -o 30)
 [ -z "$DL" ] && { log "no fetcher available (asfetch/curl/wget/busybox) — cannot fetch."; exit 1; }
 
 B64DEC=""
@@ -123,3 +106,4 @@ chmod 600 "$TARGET"
 rm -f "$CONFIG_DIR/.keybox.sha256" 2>/dev/null
 log "$TARGET updated ($(wc -c < "$TARGET") bytes)."
 exit 0
+
