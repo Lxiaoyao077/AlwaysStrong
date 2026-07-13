@@ -156,7 +156,7 @@ fi
 }&
 
 # --- First-boot bootstrap (one-shot per module install) ---
-if [ ! -f "$MODDIR/.bootstrapped" ]; then
+if [ ! -f "$CONFIG_DIR/.bootstrapped" ]; then
 {
     sleep 20
     # Try Cloudflare DNS first, fall back to Google DNS for restricted regions
@@ -178,8 +178,7 @@ if [ ! -f "$MODDIR/.bootstrapped" ]; then
 
     [ -f "$MODDIR/sync_patch.sh" ] && sh "$MODDIR/sync_patch.sh" 2>&1 | log -t "AlwaysStrong-boot"
 
-    for CPIF in "$MODDIR/custom.pif.prop" "$MODDIR/pif.prop" \
-                "$CONFIG_DIR/custom.pif.prop" "$CONFIG_DIR/pif.prop"; do
+    for CPIF in "$CONFIG_DIR/custom.pif.prop" "$CONFIG_DIR/pif.prop"; do
         [ -f "$CPIF" ] || continue
         for kv in "spoofProvider=0" "spoofVendingFinger=1" "spoofBuild=1" \
                   "spoofProps=1" "spoofSignature=0" "spoofVendingSdk=0"; do
@@ -196,7 +195,7 @@ if [ ! -f "$MODDIR/.bootstrapped" ]; then
     killall -9 com.google.android.gms.unstable 2>/dev/null
     killall -9 com.android.vending 2>/dev/null
 
-    touch "$MODDIR/.bootstrapped"
+    touch "$CONFIG_DIR/.bootstrapped"
     log -t "AlwaysStrong-boot" "bootstrap done"
 }&
 fi
