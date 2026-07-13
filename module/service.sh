@@ -225,7 +225,7 @@ fi
                 killall -9 com.android.vending 2>/dev/null
             fi
         fi
-        if [ -x "$MODDIR/status_fetch.sh" ]; then
+        if [ ! -f "$CONFIG_DIR/no_auto_indicator" ] && [ -x "$MODDIR/status_fetch.sh" ]; then
             sh "$MODDIR/status_fetch.sh" 2>&1 | log -t "AlwaysStrong-hourly"
         fi
     done
