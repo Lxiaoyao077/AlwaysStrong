@@ -9,11 +9,11 @@
 #   ./build.sh --pif v16        # override PlayIntegrityFork release tag
 #   ./build.sh --tee-file PATH  # use a LOCAL TEESimulator-RS zip (e.g. a CI build) — skip download
 #   ./build.sh --pif-file PATH  # use a LOCAL PlayIntegrityFork zip (e.g. a CI build) — skip download
+#   ./build.sh --tee-ci         # download latest TEESimulator-RS from Andrea-lyz/TEESimulator-RS-Online CI
 #   ./build.sh --clean          # wipe build/ first
 #
-# CI / nightly builds live as GitHub Actions artifacts, not release assets, so
-# fetch them yourself (e.g. `gh run download -R osm0sis/PlayIntegrityFork -D ci`)
-# and point --pif-file / --tee-file at the resulting module zip.
+# --tee-ci requires GITHUB_TOKEN env var (set to a token with repo:public_repo scope)
+# or run in GitHub Actions where GITHUB_TOKEN is auto-provisioned.
 #
 # Requires: bash, curl OR wget, unzip, zip, sha256sum (or shasum on macOS).
 
@@ -34,6 +34,11 @@ PIF_ASSET="$PIF_ASSET_DEFAULT"
 DO_CLEAN=0
 TEE_FILE=""
 PIF_FILE=""
+TEE_CI=0
+TEE_CI_OWNER="Andrea-lyz"
+TEE_CI_REPO="TEESimulator-RS-Online"
+TEE_CI_WORKFLOW="build.yml"
+TEE_CI_ARTIFACT="TEESimulator-RS-release-zip"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -43,6 +48,7 @@ while [[ $# -gt 0 ]]; do
         --pif-asset)  PIF_ASSET="$2"; shift 2 ;;
         --tee-file)   TEE_FILE="$2"; shift 2 ;;
         --pif-file)   PIF_FILE="$2"; shift 2 ;;
+        --tee-ci)     TEE_CI=1; shift ;;
         --clean)      DO_CLEAN=1; shift ;;
         -h|--help)
             sed -n '2,/^$/p' "$0"
@@ -103,6 +109,48 @@ if [[ -n "$TEE_FILE" ]]; then
     [[ -f "$TEE_FILE" ]] || die "--tee-file not found: $TEE_FILE"
     tee_zip="$TEE_FILE"
     green "    local TEE zip: $TEE_FILE"
+elif [[ "$TEE_CI" -eq 1 ]]; then
+    # --tee-ci: fetch latest CI artifact from Andrea-lyz/TEESimulator-RS-Online
+    bold "==> Fetching TEESimulator-RS from CI: $TEE_CI_OWNER/$TEE_CI_REPO"
+    if ! command -v curl >/dev/null 2>&1; then
+        die "--tee-ci requires curl"
+    fi
+    GITHUB_API="https://api.github.com"
+    GITHUB_TOKEN="${TEE_CI_TOKEN:-${GITHUB_TOKEN:-}}"
+    AUTH_HDR=()
+    [[ -n "$GITHUB_TOKEN" ]] && AUTH_HDR=(-H "Authorization: Bearer $GITHUB_TOKEN")
+
+    # 1) Find latest successful workflow run
+    RUNS_URL="$GITHUB_API/repos/$TEE_CI_OWNER/$TEE_CI_REPO/actions/workflows/$TEE_CI_WORKFLOW/runs?status=success&per_page=1"
+    RUN_JSON=$(curl -sf "${AUTH_HDR[@]}" "$RUNS_URL") || die "failed to fetch TEE CI runs"
+    ARTIFACTS_URL=$(echo "$RUN_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['workflow_runs'][0]['artifacts_url'])") || die "no successful TEE CI runs"
+
+    # 2) Find the release zip artifact
+    ARTIFACT_ID=$(curl -sf "${AUTH_HDR[@]}" "$ARTIFACTS_URL" | python3 -c "
+import sys,json
+for a in json.load(sys.stdin).get('artifacts',[]):
+    if '$TEE_CI_ARTIFACT' in a['name']:
+        print(a['id'])
+        break
+") || die "artifact '$TEE_CI_ARTIFACT' not found"
+
+    # 3) Download artifact zip
+    ARTIFACT_ZIP="$DL/tee_ci_artifact.zip"
+    bold "==> Downloading TEE CI artifact (id=$ARTIFACT_ID)"
+    curl -sfL "${AUTH_HDR[@]}" -o "$ARTIFACT_ZIP" \
+        "$GITHUB_API/repos/$TEE_CI_OWNER/$TEE_CI_REPO/actions/artifacts/$ARTIFACT_ID/zip" \
+        || die "artifact download failed"
+
+    # 4) Extract inner module zip
+    ARTIFACT_DIR="$DL/tee_ci_extracted"
+    rm -rf "$ARTIFACT_DIR"
+    mkdir -p "$ARTIFACT_DIR"
+    unzip -qq -o "$ARTIFACT_ZIP" -d "$ARTIFACT_DIR"
+    INNER_ZIP=$(ls "$ARTIFACT_DIR"/*.zip 2>/dev/null | head -1)
+    [[ -z "$INNER_ZIP" ]] && die "CI artifact contains no inner module zip"
+    green "    inner zip: $(basename "$INNER_ZIP")"
+
+    tee_zip="$INNER_ZIP"
 elif [[ ! -f "$tee_zip" ]]; then
     bold "==> Downloading TEESimulator-RS $TEE_TAG"
     $FETCH "$tee_zip" "https://github.com/Enginex0/TEESimulator-RS/releases/download/$TEE_TAG/$TEE_ASSET" \
