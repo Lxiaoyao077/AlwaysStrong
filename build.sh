@@ -95,11 +95,10 @@ fi
 
 # Portable timestamp helper: GNU find -printf '%T@' vs BSD/macOS stat -f '%m'
 _timestamp() {
-    local p="$1"
     if find --version >/dev/null 2>&1; then
-        find "$p" -type f -printf '%T@\n' 2>/dev/null
+        find "$@" -type f -printf '%T@\n' 2>/dev/null
     else
-        find "$p" -type f -exec stat -f '%m' {} \; 2>/dev/null
+        find "$@" -type f -exec stat -f '%m' {} \; 2>/dev/null
     fi
 }
 
