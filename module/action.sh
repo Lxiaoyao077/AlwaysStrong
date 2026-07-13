@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # AlwaysStrong action button.
-# Refreshes fingerprint (autopif4), enforces STRONG settings, syncs security
+# Refreshes fingerprint (autopif), enforces STRONG settings, syncs security
 # patch, then restarts PI consumers. Runs the whole chain silently and prints
 # one clean, framed summary: device, security patch, fingerprint, keybox.
 
@@ -48,8 +48,8 @@ if [ -x "$MODPATH/keybox_fetch.sh" ]; then
     fi
 fi
 
-# --- autopif4: fetch a fresh Pixel fingerprint from Google ----------------
-# autopif4 pulls the latest Pixel build from several Google hosts (developer.
+# --- autopif: fetch a fresh Pixel fingerprint from Google ----------------
+# autopif pulls the latest Pixel build from several Google hosts (developer.
 # android.com, flash.android.com, content-flashstation-pa.googleapis.com, ...)
 # and exits non-zero if ANY single one fails — that is exactly what shows up
 # as "fingerprint cached (offline?)". Bound it with a timeout so a stalled
@@ -57,12 +57,12 @@ fi
 # keep the real output in CONFIG_DIR/autopif.log (instead of /dev/null) so an
 # "offline" result is actually diagnosable.
 FP_OK=1
-if [ -f "$MODPATH/autopif4.sh" ]; then
+if [ -f "$MODPATH/autopif.sh" ]; then
     run_autopif() {
         if command -v timeout >/dev/null 2>&1; then
-            timeout 60 sh "$MODPATH/autopif4.sh" -s -m
+            timeout 60 sh "$MODPATH/autopif.sh" -s -m
         else
-            sh "$MODPATH/autopif4.sh" -s -m
+            sh "$MODPATH/autopif.sh" -s -m
         fi
     }
     run_autopif >"$CONFIG_DIR/autopif.log" 2>&1 \
