@@ -70,12 +70,6 @@ for f in module.prop service.sh post-fs-data.sh action.sh \
   install_file "$f" "$MODPATH"
 done
 
-# module banner shown by the root manager (module.prop -> banner=.../banner.png)
-if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "^.*banner\.png"; then
-  install_file "banner.png" "$MODPATH"
-  chmod 644 "$MODPATH/banner.png" 2>/dev/null
-fi
-
 # --- TEESim binaries ------------------------------------------------------
 install_file "lib/$ABI_DIR/libTEESimulator.so" "$MODPATH"
 install_file "lib/$ABI_DIR/libinject.so"       "$MODPATH"
