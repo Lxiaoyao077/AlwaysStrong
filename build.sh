@@ -271,7 +271,7 @@ asfetch_needs_build() {
 }
 
 if asfetch_needs_build; then
-    bold "==> Building native fetcher (Rust + rustls, 4 ABIs)"
+    bold "==> Building native fetcher (Rust + rustls, 2 ABIs)"
     if ! command -v cargo >/dev/null 2>&1 && [[ -f "$HOME/.cargo/env" ]]; then
         # shellcheck disable=SC1091
         source "$HOME/.cargo/env"
