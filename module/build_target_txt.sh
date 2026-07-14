@@ -118,7 +118,7 @@ is_installed() { printf '%s\n' "$ALL" | grep -Fxq "$1"; }
     [ -z "$pkg" ] && continue
     # In force/certchain mode, append suffix to every non-forced package
     case "$pkg" in
-        *[!?]) printf '%s\n' "$pkg" ;;
+        *[?!]) printf '%s\n' "$pkg" ;;
         *)
             if [ "$MODE" = "force" ] || [ "$MODE" = "certchain" ]; then
                 printf '%s%s\n' "$pkg" "$SUFFIX"
