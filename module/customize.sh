@@ -64,7 +64,7 @@ for f in module.prop service.sh post-fs-data.sh action.sh \
          uninstall.sh common_func.sh sepolicy.rule \
          keybox_fetch.sh build_target_txt.sh status_fetch.sh description.txt \
          rom_spoof_block.sh conflict_scan.sh sync_patch.sh \
-         autopif.sh pif.prop security_patch.sh \
+         autopif.sh security_patch.sh \
          target.txt daemon ; do
   install_file "$f" "$MODPATH"
 done
