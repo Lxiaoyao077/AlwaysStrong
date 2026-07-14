@@ -1,5 +1,6 @@
 # Shared helper functions for AlwaysStrong module scripts.
-# Adapted from PlayIntegrityFork's common_func.sh (osm0sis, chiteroman, Displax).
+# Merged from PlayIntegrityFix v4.7-inject-s (download/download_fail/sleep_pause)
+# and AlwaysStrong enhancements (find_tool, delprop_if_exist, resetprop_hexpatch).
 
 SKIPDELPROP=false
 [ -f "$MODPATH/skipdelprop" ] && SKIPDELPROP=true
@@ -8,26 +9,6 @@ SKIPDELPROP=false
 delprop_if_exist() {
     local NAME="$1"
     [ -n "$(resetprop "$NAME")" ] && resetprop --delete "$NAME"
-}
-
-SKIPPERSISTPROP=false
-[ -f "$MODPATH/skippersistprop" ] && SKIPPERSISTPROP=true
-
-# persistprop <prop name> <new value>
-persistprop() {
-    local NAME="$1"
-    local NEWVALUE="$2"
-    local CURVALUE
-    CURVALUE="$(resetprop "$NAME")"
-
-    if ! grep -q "$NAME" "$MODPATH/uninstall.sh" 2>/dev/null; then
-        if [ "$CURVALUE" ]; then
-            [ "$NEWVALUE" = "$CURVALUE" ] || echo "resetprop -n -p \"$NAME\" \"$CURVALUE\"" >> "$MODPATH/uninstall.sh"
-        else
-            echo "resetprop -p --delete \"$NAME\"" >> "$MODPATH/uninstall.sh"
-        fi
-    fi
-    resetprop -n -p "$NAME" "$NEWVALUE"
 }
 
 RESETPROP="resetprop -n"
@@ -89,6 +70,40 @@ if [ "$(getprop sys.boot_completed)" != "1" ]; then
     ui_print() { return; }
 fi
 
+# --- PIF: sleep_pause / download_fail / download (from v4.7-inject-s) ---
+sleep_pause() {
+    # APatch and KernelSU needs this
+    # but not KSU_NEXT, MMRL
+    if [ -z "$MMRL" ] && [ -z "$KSU_NEXT" ] && { [ "$KSU" = "true" ] || [ "$APATCH" = "true" ]; }; then
+        sleep 5
+    fi
+}
+
+download_fail() {
+    dl_domain=$(echo "$1" | awk -F[/:] '{print $4}')
+    # Clean up on download fail
+    rm -rf "$TEMPDIR"
+    ping -c 1 -W 20 "$dl_domain" > /dev/null 2>&1 || {
+        echo "[!] Unable to connect to $dl_domain, please check your internet connection and try again"
+        sleep_pause
+        exit 1
+    }
+    conflict_module=$(ls /data/adb/modules | grep busybox)
+    for i in $conflict_module; do
+        echo "[!] Please remove $i and try again."
+    done
+    echo "[!] download failed!"
+    echo "[x] bailing out!"
+    sleep_pause
+    exit 1
+}
+
+download() { busybox wget -T 10 --no-check-certificate -qO - "$1" > "$2" || download_fail "$1"; }
+if command -v curl > /dev/null 2>&1; then
+    download() { curl --connect-timeout 10 -s "$1" > "$2" || download_fail "$1"; }
+fi
+
+# --- AlwaysStrong: find_tool ---
 # find_tool <cmd> <subcmd> <test_expr>
 # Searches for a CLI tool (command or busybox subcommand).
 #   $1 — command name (e.g. "base64" / "sha256sum")
