@@ -154,6 +154,16 @@ if [ ! -f "$CONFIG_DIR/hbk" ]; then
 fi
 rm -f "$CONFIG_DIR/tee_status.txt" "$CONFIG_DIR/tee_status" 2>/dev/null
 
+# --- status_json.sh + conflicts.txt (Specter-style) -----------------------
+if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "status_json.sh"; then
+  install_file "status_json.sh" "$MODPATH"
+  chmod 755 "$MODPATH/status_json.sh"
+fi
+if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "config/conflicts.txt"; then
+  mkdir -p "$CONFIG_DIR/config"
+  install_file "config/conflicts.txt" "$CONFIG_DIR/config"
+fi
+
 ui_print ""
 ui_print "installed. reboot, then tap [Action] to refresh."
 ui_print ""

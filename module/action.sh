@@ -206,6 +206,10 @@ am force-stop com.android.vending >/dev/null 2>&1
 if [ -x "$MODPATH/status_fetch.sh" ]; then
     MODPATH="$MODPATH" sh "$MODPATH/status_fetch.sh" manual >/dev/null 2>&1
 fi
+# Refresh WebUI preload JSON so toggles/states render instantly on next open.
+if [ -x "$MODPATH/status_json.sh" ]; then
+    sh "$MODPATH/status_json.sh" >/dev/null 2>&1
+fi
 
 # --- WebUI: Magisk only (background, silent) ---
 if [ -d /data/adb/magisk ] && [ "$KSU" != "true" ] && [ "$APATCH" != "true" ]; then

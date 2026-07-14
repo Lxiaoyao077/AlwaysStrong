@@ -259,5 +259,10 @@ fi
         if [ -x "$MODDIR/status_fetch.sh" ]; then
             sh "$MODDIR/status_fetch.sh" 2>&1 | log -t "AlwaysStrong-hourly"
         fi
+        # Preload JSON for WebUI — generated from module state so the UI
+        # renders instantly (no per-toggle ksuExec waterfall on load).
+        if [ -x "$MODDIR/status_json.sh" ]; then
+            sh "$MODDIR/status_json.sh" 2>&1 | log -t "AlwaysStrong-hourly"
+        fi
     done
 }&
