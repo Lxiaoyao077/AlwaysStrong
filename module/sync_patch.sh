@@ -25,7 +25,7 @@ MODE="${1:-}"
 SP=""
 SRC=""
 for f in "$CONFIG_DIR/custom.pif.prop" "$CONFIG_DIR/pif.prop" \
-         "$CONFIG_DIR/custom.pif.prop" "$CONFIG_DIR/pif.prop"; do
+         "$MODPATH/custom.pif.prop" "$MODPATH/pif.prop"; do
     [ -s "$f" ] || continue
     SP=$(grep -m1 '^SECURITY_PATCH=' "$f" | cut -d= -f2- | tr -d ' "'\''\r')
     [ -n "$SP" ] && { SRC="$f"; break; }
