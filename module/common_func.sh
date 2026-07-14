@@ -2,9 +2,6 @@
 # Merged from PlayIntegrityFix v4.7-inject-s (download/download_fail/sleep_pause)
 # and AlwaysStrong enhancements (find_tool, delprop_if_exist, resetprop_hexpatch).
 
-SKIPDELPROP=false
-[ -f "$MODPATH/skipdelprop" ] && SKIPDELPROP=true
-
 # delprop_if_exist <prop name>
 delprop_if_exist() {
     local NAME="$1"
