@@ -1,31 +1,23 @@
 #!/system/bin/sh
 # mount_isolation.sh — mount namespace isolation for GMS + Play Store
 #
-# Creates a private mount namespace for PI-critical processes so
-# that /data/adb/tricky_store (keybox/target.txt) and module files
-# are only visible inside the GMS sandbox, not to detection apps
-# that scan /proc/mounts or /proc/self/mountinfo.
+# Enters the GMS process mount namespace via nsenter and bind-mounts
+# a minimal tmpfs over /data/adb/tricky_store so detection apps that
+# scan /proc/<gms_pid>/mountinfo only see an empty directory with a
+# sanitized target.txt — not our full module config (keybox, pif.prop, etc.).
 #
-# Strategy: wait for GMS unstable process, then unshare its mount ns,
-# bind-mount our config files into its private view.
+# This is a best-effort countermeasure: on devices where SELinux blocks
+# nsenter or mount --bind inside a foreign namespace, the script degrades
+# to a monitor-only mode (log + skip, no crash).
 
 MODDIR="${MODPATH:-$(dirname "$0")}"
 CFG=/data/adb/tricky_store
 LOG_FILE="$MODDIR/mount_isolation.log"
+CLEAN_DIR=/data/local/tmp/.as_mount_clean
 
 log() {
   echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG_FILE"
 }
-
-# Check if unshare is available (toybox or standalone)
-UNSHARE=""
-for u in /system/bin/unshare /system/xbin/unshare /data/adb/ksu/bin/busybox; do
-  [ -x "$u" ] && { UNSHARE="$u"; break; }
-done
-[ -z "$UNSHARE" ] && [ -x /system/bin/toybox ] && UNSHARE="/system/bin/toybox unshare"
-[ -z "$UNSHARE" ] && { log "no unshare binary found, mount isolation skipped"; exit 0; }
-
-log "starting mount isolation daemon (unshare=$UNSHARE)"
 
 # GMS processes we want to isolate
 TARGET_PROCESSES="com.google.android.gms.unstable com.android.vending com.google.android.gms"
@@ -36,37 +28,46 @@ isolate_process() {
   pid=$(pidof "$proc_name" 2>/dev/null | awk '{print $1}')
   [ -z "$pid" ] && return 1
 
-  # Check if already isolated (marker file in private ns)
-  local marker="/proc/$pid/root/data/adb/tricky_store/.isolated"
+  # Already isolated? Check marker from GMS' own root view
+  local marker="/proc/$pid/root/data/local/tmp/.as_mount_clean/.isolated"
   [ -f "$marker" ] 2>/dev/null && return 0
 
-  log "isolating $proc_name (pid=$pid)"
-
-  # Enter the process's mount namespace and bind-mount
-  # We bind-mount a fresh view where only our CFG dir is visible
   local ns_mnt="/proc/$pid/ns/mnt"
   [ ! -e "$ns_mnt" ] && return 1
 
-  # Use nsenter to run bind mounts inside the process's namespace
+  # Build a clean tmpfs with minimal content, then bind-mount it over
+  # /data/adb/tricky_store inside the GMS process's mount namespace.
+  # The tmpfs hides keybox.xml, pif.prop, and all other config files
+  # from detection apps scanning GMS mountinfo.
+  # If SELinux blocks any step, the entire command fails silently and
+  # we skip this PID (next cycle will retry with the same PID since
+  # the marker won't be written).
   nsenter -m -t "$pid" -- /system/bin/sh -c "
-    # Make sure our config files are present in the process's view
-    mkdir -p '$CFG' 2>/dev/null
-    # Touch marker so we don't re-isolate
-    touch '$CFG/.isolated' 2>/dev/null
+    rm -rf '$CLEAN_DIR' 2>/dev/null
+    mkdir -p '$CLEAN_DIR' 2>/dev/null || exit 1
+    mount -t tmpfs tmpfs '$CLEAN_DIR' 2>/dev/null || exit 1
+    echo 'com.google.android.gms
+io.github.vvb2060.keyattestation
+io.github.vvb2060.mahoshojo' > '$CLEAN_DIR/target.txt'
+    mount --bind '$CLEAN_DIR' '$CFG' 2>/dev/null || exit 1
+    touch '$CLEAN_DIR/.isolated' 2>/dev/null
   " 2>/dev/null
 
   if [ $? -eq 0 ]; then
-    log "  isolated $proc_name OK"
+    log "isolated $proc_name (pid=$pid) OK"
     return 0
   else
-    log "  isolate $proc_name failed"
+    # SELinux or nsenter failure — log and skip. No fallback because
+    # there's no safe degraded mode for mount isolation.
+    log "isolate $proc_name FAILED (SELinux/nsenter — skipping)"
     return 1
   fi
 }
 
-# --- PID polling loop ---
-# Re-scan every 30s because GMS unstable process can be killed/restarted
-# by the system. We want to catch each new instance.
+# --- daemon loop ---
+# Re-scan every 30s because GMS unstable process can be killed/restarted.
+# Each new instance gets isolated on the next cycle.
+log "mount isolation daemon started"
 while true; do
   for target in $TARGET_PROCESSES; do
     isolate_process "$target" 2>/dev/null
