@@ -45,6 +45,23 @@ find_busybox() {
   return 1;
 }
 
+# Portable sed_i -i wrapper — toybox sed lacks -i, busybox sed always supports it.
+sed_i() {
+  if find_busybox; then
+    $BUSYBOX sed "$@"
+  else
+    # Fallback: strip -i, write to temp, move back.
+    local args=""
+    local last=""
+    for a in "$@"; do
+      [ "$a" = "-i" ] && continue
+      last="$a"; args="$args $a"
+    done
+    local tmp="${last}.tmp.$$"
+    sed $args > "$tmp" && cat "$tmp" > "$last" && rm -f "$tmp"
+  fi
+}
+
 if ! which wget >/dev/null || grep -q "wget-curl" $(which wget); then
   if ! find_busybox; then
     die_bb "wget not found";
@@ -209,10 +226,10 @@ if [ -f "$MIGRATE" ]; then
     for SETTING in $ADVSETTINGS; do
       eval [ -z \"\$$SETTING\" ] \&\& $SETTING=$(grep_config "$SETTING" $OLDPIF);
       eval TMPVAL=\$$SETTING;
-      [ -n "$TMPVAL" ] && sed -i "s;\($SETTING=\).;\1$TMPVAL;" custom.pif.prop;
+      [ -n "$TMPVAL" ] && sed_i -i "s;\($SETTING=\).;\1$TMPVAL;" custom.pif.prop;
     done;
   fi;
-  [ "$PATCH_COMMENT" ] && sed -i 's;\*.security_patch;#\*.security_patch;' custom.pif.prop;
+  [ "$PATCH_COMMENT" ] && sed_i -i 's;\*.security_patch;#\*.security_patch;' custom.pif.prop;
   echo "\n# Canary Released: $CANARY_REL_DATE\n# Estimated Expiry: $CANARY_EXP_DATE" >> custom.pif.prop;
   cat custom.pif.prop;
 fi;
@@ -248,16 +265,16 @@ EOF
     else
       item "Updating Tricky Store security_patch.txt ...";
       [ -s "$TS_SECPAT" ] || echo "all=" > $TS_SECPAT;
-      grep -qE '^[0-9]{8}$' $TS_SECPAT && sed -i "s/^.*$/${SECURITY_PATCH//-}/" $TS_SECPAT;
-      grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' $TS_SECPAT && sed -i "s/^.*$/$SECURITY_PATCH/" $TS_SECPAT;
+      grep -qE '^[0-9]{8}$' $TS_SECPAT && sed_i -i "s/^.*$/${SECURITY_PATCH//-}/" $TS_SECPAT;
+      grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' $TS_SECPAT && sed_i -i "s/^.*$/$SECURITY_PATCH/" $TS_SECPAT;
     fi;
     if ! grep -q 'all=device_default' $TS_SECPAT; then
-      grep -q 'all=' $TS_SECPAT && sed -i "s/all=.*/all=$SECURITY_PATCH/" $TS_SECPAT;
+      grep -q 'all=' $TS_SECPAT && sed_i -i "s/all=.*/all=$SECURITY_PATCH/" $TS_SECPAT;
     fi;
     if ! grep -q 'system=no' $TS_SECPAT; then
-      grep -q 'system=' $TS_SECPAT && sed -i "s/system=.*/system=$(echo ${SECURITY_PATCH//-} | cut -c-6)/" $TS_SECPAT;
+      grep -q 'system=' $TS_SECPAT && sed_i -i "s/system=.*/system=$(echo ${SECURITY_PATCH//-} | cut -c-6)/" $TS_SECPAT;
     fi;
-    sed -i '$a\' $TS_SECPAT;
+    sed_i -i '$a\' $TS_SECPAT;
     cat $TS_SECPAT;
   fi;
   if [ -f /data/adb/modules/playintegrityfix/killpi.sh ]; then
