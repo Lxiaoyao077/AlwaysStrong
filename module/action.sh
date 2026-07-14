@@ -75,7 +75,6 @@ sleep 1
 
 # --- Step 2: Keybox ---
 # Custom-keybox mode (WebUI toggle): user supplied their own keybox, skip fetch.
-KB_PID=""
 if [ -f "$CONFIG_DIR/custom_keybox" ]; then
     if [ -s "$CONFIG_DIR/keybox.xml" ] && head -c 4096 "$CONFIG_DIR/keybox.xml" | grep -q "Keybox"; then
         row "🔑" "自定义密钥 — 跳过获取"
@@ -187,8 +186,10 @@ pick_pif() {
     return 1
 }
 PIF=$(pick_pif)
-MD=$(grep -m1 '^MODEL=' "$PIF" 2>/dev/null | cut -d= -f2-)
-[ -z "$PATCH" ] && PATCH=$(grep -m1 '^SECURITY_PATCH=' "$PIF" 2>/dev/null | cut -d= -f2-)
+if [ -n "$PIF" ]; then
+    MD=$(grep -m1 '^MODEL=' "$PIF" 2>/dev/null | cut -d= -f2-)
+    [ -z "$PATCH" ] && PATCH=$(grep -m1 '^SECURITY_PATCH=' "$PIF" 2>/dev/null | cut -d= -f2-)
+fi
 
 row "🗓️" "${PATCH:-unknown}"
 sleep 1
