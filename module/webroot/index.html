@@ -470,19 +470,6 @@ function ksuExec(cmd){
   });
 }
 
-// External-link opener for KSU/APatch WebView (which traps navigation
-// in the panel). MMRL respects normal <a> so we only fire am-intent
-// when the ksu bridge is present.
-function openExternal(url){
-  const safe=url.replace(/'/g,"'\\''");
-  if(typeof ksu!=="undefined" && ksu.exec){
-    ksuExec(`am start -a android.intent.action.VIEW -d '${safe}' >/dev/null 2>&1`);
-    return true;
-  }
-  return false;
-}
-
-
 const CFG="/data/adb/tricky_store";
 const FP_FLAG=CFG+"/no_auto_fp";
 const KB_FLAG=CFG+"/no_auto_keybox";
