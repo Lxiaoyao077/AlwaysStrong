@@ -380,9 +380,14 @@ done
 bold "==> Patching security_patch.sh: system.prop -> CONFIG_DIR"
 "${SED_I[@]}" 's|\$MODDIR/system.prop|/data/adb/tricky_store/system.prop|g' "$STAGE/security_patch.sh"
 
-# 7) Patch PIF autopif.sh: TEMPDIR fallback -> CONFIG_DIR (avoid MODPATH write on KSU)
-bold "==> Patching autopif.sh: TEMPDIR fallback -> CONFIG_DIR"
+# 7) Patch PIF autopif.sh: eliminate all MODPATH writes
+#    a) TEMPDIR fallback -> CONFIG_DIR (avoid MODPATH write on KSU)
+#    b) tee pif.prop -> absolute path (immune to cd "$TEMPDIR" failure)
+#    c) cd guard: exit if cd fails (don't silently write to CWD=MODPATH)
+bold "==> Patching autopif.sh: eliminate MODPATH writes"
 "${SED_I[@]}" 's|TEMPDIR="\$MODDIR/temp" #fallback|TEMPDIR="/data/adb/tricky_store/temp" #fallback (AlwaysStrong: avoid KSU MODPATH write)|g' "$STAGE/autopif.sh"
+"${SED_I[@]}" 's|tee pif\.prop|tee "\$TEMPDIR/pif.prop"|' "$STAGE/autopif.sh"
+"${SED_I[@]}" 's|cd "\$TEMPDIR"$|cd "\$TEMPDIR" || { echo "autopif: cd to \$TEMPDIR failed" >\&2; exit 1; }|' "$STAGE/autopif.sh"
 
 
 
