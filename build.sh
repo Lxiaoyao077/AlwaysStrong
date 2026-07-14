@@ -380,6 +380,10 @@ done
 bold "==> Patching security_patch.sh: system.prop -> CONFIG_DIR"
 "${SED_I[@]}" 's|\$MODDIR/system.prop|/data/adb/tricky_store/system.prop|g' "$STAGE/security_patch.sh"
 
+# 6b) Patch PIF autopif.sh: use CONFIG_DIR for TEMPDIR fallback instead of MODDIR/temp
+#     (KSU tamper: any directory/file created inside MODPATH may trigger tamper)
+"${SED_I[@]}" 's|TEMPDIR="$MODDIR/temp"|TEMPDIR="/data/adb/tricky_store/.autopif_tmp"|g' "$STAGE/autopif.sh"
+
 
 
 # 5b) Binary-patch the PIF zygisk .so libraries so they read classes.dex and
