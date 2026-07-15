@@ -138,7 +138,7 @@ for proc in TEESimulator supervisor daemon aswatcher; do
     kill -9 "$pid" 2>/dev/null
   done
 done
-pkill -9 -f TEESimulator 2>/dev/null || true
+for pid in $(pidof TEESimulator 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 
 # Fork-based supervisor + daemon (TEESimulator-RS standard pattern)
 "$MODDIR/supervisor" "$MODDIR/daemon" "$MODDIR" &
@@ -291,8 +291,8 @@ if [ ! -f "$CONFIG_DIR/.bootstrapped" ]; then
     done
 
     # 4. restart PI consumers so they pick up the new state
-    killall -9 com.google.android.gms.unstable 2>/dev/null
-    killall -9 com.android.vending 2>/dev/null
+    for pid in $(pidof com.google.android.gms.unstable 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
+    for pid in $(pidof com.android.vending 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 
     # NOTE: deliberately do NOT call status_fetch here. We don't want
     # the 🟢 status prefix to appear in module.prop's description before
@@ -361,8 +361,8 @@ fi
             [ -n "$kbout" ] && echo "$kbout" | log -t "AlwaysStrong-hourly"
             if [ "$kbrc" = "0" ]; then
                 log_save "AlwaysStrong-hourly" "keybox updated, restarting PI"
-                killall -9 com.google.android.gms.unstable 2>/dev/null
-                killall -9 com.android.vending 2>/dev/null
+                for pid in $(pidof com.google.android.gms.unstable 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
+                for pid in $(pidof com.android.vending 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
             fi
         fi
         # Status — independent of toggles; cheap GET, idempotent module.prop write
