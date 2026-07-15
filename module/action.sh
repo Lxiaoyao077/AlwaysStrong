@@ -22,34 +22,9 @@ VER=$(grep -m1 '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2-)
 
 row() { echo "    $1   $2"; }
 
-# --- ABI + fetchers ---
-case "$(uname -m)" in
-    aarch64)        ABI=arm64-v8a ;;
-    armv7*|armv8l)  ABI=armeabi-v7a ;;
-    *)              ABI="" ;;
-esac
-ASFETCH=""
-[ -n "$ABI" ] && [ -x "$MODPATH/bin/$ABI/asfetch" ] && ASFETCH="$MODPATH/bin/$ABI/asfetch"
-BB=""
-for bb in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox \
-          /data/adb/modules/busybox-ndk/system/*/busybox; do
-    [ -x "$bb" ] && BB="$bb" && break
-done
-
-# asfetch first (connects IPv4-first, works on IPv6-only-DNS networks); fall
-# through to busybox wget / curl if it ever fails on a host.
-dl_out() {
-    if [ -n "$ASFETCH" ]; then $ASFETCH -T 20 "$1" 2>/dev/null && return 0; fi
-    if [ -n "$BB" ]; then $BB wget -q -T 20 -O - "$1" 2>/dev/null && return 0; fi
-    if command -v curl >/dev/null 2>&1; then curl -fsSL --max-time 20 "$1" 2>/dev/null && return 0; fi
-    if command -v wget >/dev/null 2>&1; then wget -q -T 20 -O - "$1" 2>/dev/null && return 0; fi
-    return 1
-}
-dl_to() {
-    if [ -n "$ASFETCH" ]; then rm -f "$1"; $ASFETCH -T 60 -o "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
-    if [ -n "$BB" ]; then rm -f "$1"; $BB wget -q -T 60 -O "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
-    if command -v curl >/dev/null 2>&1; then rm -f "$1"; curl -fsSL --max-time 60 -o "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
-    if command -v wget >/dev/null 2>&1; then rm -f "$1"; wget -q -T 60 -O "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
+# --- ABI + fetchers (via common_func.sh) ---
+resolve_asfetch "$MODPATH"
+resolve_bband -v wget >/dev/null 2>&1; then rm -f "$1"; wget -q -T 60 -O "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
     return 1
 }
 
