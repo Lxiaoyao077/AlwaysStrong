@@ -4,8 +4,7 @@
 # Detection apps can scan logcat for AlwaysStrong-specific log tags
 # or error messages that reveal module internals. This script:
 #   1. Suppresses our log tags via persist.log.tag.* props
-#   2. Periodically removes only our own log lines (per-tag sed)
-#   3. Sanitizes ANR/tombstone files by removing only our references
+#   2. Sanitizes ANR/tombstone files by removing only our references
 
 MODDIR="${MODPATH:-$(dirname "$0")}"
 LOG_DIR="$MODDIR/logs"
@@ -35,22 +34,14 @@ rm -f /data/local/tmp/AlwaysStrong*.log 2>/dev/null
 # The -d flag dumps and exits (non-blocking), safe for periodic use.
 
 scrub_logcat() {
-  local tmp="/data/local/tmp/.as_lc_scrub.$$"
   local changed=0
 
-  for buf in main system crash events; do
-    if logcat -b "$buf" -d 2>/dev/null | grep -qiE "AlwaysStrong|TEESimulator|aswatcher" >/dev/null 2>&1; then
-      logcat -b "$buf" -d 2>/dev/null | grep -viE 'AlwaysStrong|TEESimulator|aswatcher' > "$tmp" 2>/dev/null
-      if [ -s "$tmp" ]; then
-        logcat -b "$buf" -c 2>/dev/null
-        cat "$tmp" | while IFS= read -r line; do
-          echo "$line" > /dev/kmsg 2>/dev/null
-        done
-      fi
-      changed=1
-    fi
-  done
-  rm -f "$tmp" 2>/dev/null
+  # persist.log.tag.* suppression (above) already prevents new logcat lines
+  # from our tags. For existing lines in the ring buffer (~64KB per buffer),
+  # we let them age out naturally — clearing buffers is itself a detection
+  # signal and writing restored lines to /dev/kmsg puts them in dmesg (which
+  # some OEMs still expose), creating a second detection vector.
+  # Only scrub persistent files: ANR traces and tombstones.
 
   # ANR traces — remove lines containing our processes (sed, not rm)
   for anr in /data/anr/anr_* /data/anr/traces.txt; do
