@@ -57,7 +57,7 @@ for prefix in $CUSTOM_ROM_PREFIXES; do
     # 列出所有以此前缀开头的属性并清除
     existing_props="$(getprop | grep "^\[$prefix" | sed 's/^\[\(.*\)\].*/\1/' 2>/dev/null)"
     for prop in $existing_props; do
-        resetprop -d "$prop" 2>/dev/null || true
+        resetprop -n "$prop" "" 2>/dev/null || true
         fixed_count=$((fixed_count + 1))
     done
 done
