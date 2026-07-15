@@ -40,6 +40,26 @@ log() { echo "pif_native_fetch: $*"; }
 # ---- Resolve the module dir + asfetch binary ----
 SELF_DIR=$(cd "${0%/*}" 2>/dev/null && pwd)
 [ -z "$SELF_DIR" ] && SELF_DIR=/data/adb/modules/tricky_store
+
+# ---- Load proxy config ----
+PROXY_HOST= PROXY_PORT= PROXY_AUTH=
+cf="${SELF_DIR}/config/proxy.conf"
+if [ -f "$cf" ]; then
+    PROXY_HOST=$(grep -E '^PROXY_HOST=' "$cf" 2>/dev/null | cut -d= -f2-)
+    PROXY_PORT=$(grep -E '^PROXY_PORT=' "$cf" 2>/dev/null | cut -d= -f2-)
+    PROXY_AUTH=$(grep -E '^PROXY_AUTH=' "$cf" 2>/dev/null | cut -d= -f2-)
+fi
+if [ -n "$PROXY_HOST" ] && [ -n "$PROXY_PORT" ]; then
+    if [ -n "$PROXY_AUTH" ]; then
+        export http_proxy="http://${PROXY_AUTH}@${PROXY_HOST}:${PROXY_PORT}"
+        export https_proxy="http://${PROXY_AUTH}@${PROXY_HOST}:${PROXY_PORT}"
+    else
+        export http_proxy="http://${PROXY_HOST}:${PROXY_PORT}"
+        export https_proxy="http://${PROXY_HOST}:${PROXY_PORT}"
+    fi
+    PROXY_ACTIVE=1
+    log "proxy enabled: ${PROXY_HOST}:${PROXY_PORT}"
+fi
 case "$(uname -m)" in
     aarch64)        ABI=arm64-v8a ;;
     armv7*|armv8l)  ABI=armeabi-v7a ;;
@@ -66,16 +86,10 @@ fi
 # busybox wget / curl are fallbacks in case asfetch ever fails on a host.
 fetch() {
     _o="$1"; _u="$2"; _ref="$3"
-    if [ -n "$ABI" ] && [ -x "$ASFETCH" ]; then
+    if [ -z "$PROXY_ACTIVE" ] && [ -n "$ABI" ] && [ -x "$ASFETCH" ]; then
         rm -f "$_o"
         if [ -n "$_ref" ]; then "$ASFETCH" -T "$TIMEOUT" -H "Referer: $_ref" -o "$_o" "$_u" 2>/dev/null
         else "$ASFETCH" -T "$TIMEOUT" -o "$_o" "$_u" 2>/dev/null; fi
-        [ -s "$_o" ] && return 0
-    fi
-    if [ -n "$BB" ]; then
-        rm -f "$_o"
-        if [ -n "$_ref" ]; then "$BB" wget -q -T "$TIMEOUT" --header "Referer: $_ref" --no-check-certificate -O "$_o" "$_u" 2>/dev/null
-        else "$BB" wget -q -T "$TIMEOUT" --no-check-certificate -O "$_o" "$_u" 2>/dev/null; fi
         [ -s "$_o" ] && return 0
     fi
     if command -v curl >/dev/null 2>&1; then
@@ -88,6 +102,12 @@ fetch() {
         rm -f "$_o"
         if [ -n "$_ref" ]; then wget -q -T "$TIMEOUT" --header "Referer: $_ref" -O "$_o" "$_u" 2>/dev/null
         else wget -q -T "$TIMEOUT" -O "$_o" "$_u" 2>/dev/null; fi
+        [ -s "$_o" ] && return 0
+    fi
+    if [ -n "$BB" ]; then
+        rm -f "$_o"
+        if [ -n "$_ref" ]; then "$BB" wget -q -T "$TIMEOUT" --header "Referer: $_ref" --no-check-certificate -O "$_o" "$_u" 2>/dev/null
+        else "$BB" wget -q -T "$TIMEOUT" --no-check-certificate -O "$_o" "$_u" 2>/dev/null; fi
         [ -s "$_o" ] && return 0
     fi
     return 1

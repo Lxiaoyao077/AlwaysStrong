@@ -67,6 +67,27 @@ if [ "$(getprop sys.boot_completed)" != "1" ]; then
     ui_print() { return; }
 fi
 
+# --- TieJia: load_proxy ---
+# Reads config/proxy.conf and exports http_proxy / https_proxy env vars.
+# Call this before any network fetch if you need proxy support.
+load_proxy() {
+    local cf="${MODDIR:-$MODPATH}/config/proxy.conf"
+    [ -f "$cf" ] || return 1
+    local host port auth
+    host=$(grep -E '^PROXY_HOST=' "$cf" 2>/dev/null | cut -d= -f2-)
+    port=$(grep -E '^PROXY_PORT=' "$cf" 2>/dev/null | cut -d= -f2-)
+    auth=$(grep -E '^PROXY_AUTH=' "$cf" 2>/dev/null | cut -d= -f2-)
+    [ -z "$host" ] || [ -z "$port" ] && return 1
+    if [ -n "$auth" ]; then
+        export http_proxy="http://${auth}@${host}:${port}"
+        export https_proxy="http://${auth}@${host}:${port}"
+    else
+        export http_proxy="http://${host}:${port}"
+        export https_proxy="http://${host}:${port}"
+    fi
+    return 0
+}
+
 # --- PIF: sleep_pause / download_fail / download (from v4.7-inject-s) ---
 sleep_pause() {
     # APatch and KernelSU needs this
@@ -95,9 +116,9 @@ download_fail() {
     exit 1
 }
 
-download() { busybox wget -T 10 --no-check-certificate -qO - "$1" > "$2" || download_fail "$1"; }
+download() { load_proxy; busybox wget -T 10 --no-check-certificate -qO - "$1" > "$2" || download_fail "$1"; }
 if command -v curl > /dev/null 2>&1; then
-    download() { curl --connect-timeout 10 -s "$1" > "$2" || download_fail "$1"; }
+    download() { load_proxy; curl --connect-timeout 10 -s "$1" > "$2" || download_fail "$1"; }
 fi
 
 # --- TieJia: find_tool ---
