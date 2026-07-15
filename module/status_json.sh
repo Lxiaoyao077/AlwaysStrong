@@ -7,6 +7,9 @@ MODDIR="${0%/*}"
 [ -z "$MODDIR" ] && MODDIR="$PWD"
 cd "$MODDIR" 2>/dev/null
 
+# Source shared helpers (is_valid_keybox etc.)
+[ -f "$MODDIR/common_func.sh" ] && . "$MODDIR/common_func.sh"
+
 CFG=/data/adb/tricky_store
 OUT="$CFG/status.json"
 WEBUI="$MODDIR/webroot/status.json"
@@ -38,7 +41,7 @@ KB_SIZE=0
 KB_SAFE=false
 if [ -s "$CFG/keybox.xml" ]; then
     KB_SIZE=$(wc -c < "$CFG/keybox.xml" 2>/dev/null)
-    head -c 4096 "$CFG/keybox.xml" 2>/dev/null | grep -qi -e Keybox -e AndroidAttestation && KB_SAFE=true
+    is_valid_keybox "$CFG/keybox.xml" && KB_SAFE=true
 fi
 KB_SRC=$(kb_source)
 
@@ -76,7 +79,7 @@ INT_MIN=$((INT_SEC / 60))
 
 # --- build vars ---
 # Escape for JSON: \ " and control chars
-json_esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\x01/\\u0001/g'; }
+json_esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/\r//g' -e 's/$/\\n/' -e '$ s/\\n$//' -e 's/\x01/\\u0001/g'; }
 
 cat > "$OUT" <<JSONEOF
 {

@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# AlwaysStrong — keep the security patch level consistent across:
+# TieJia — keep the security patch level consistent across:
 #   1. /data/adb/tricky_store/security_patch.txt  — the patch level TEESimulator
 #      stamps into the keystore hardware attestation. If this is missing or
 #      stale the verdict drops to DEVICE even with a good keybox.
@@ -18,7 +18,9 @@ case "$0" in
     *)   MODPATH="$PWD" ;;
 esac
 [ -z "$MODPATH" ] && MODPATH="$PWD"
-CONFIG_DIR=/data/adb/tricky_store
+[ -f "$MODPATH/common_func.sh" ] && . "$MODPATH/common_func.sh"
+find_sed 2>/dev/null || SED="sed -i"
+CONFIG_DIR="${TIEJIA_CONFIG_DIR:-/data/adb/tricky_store}"
 MODE="${1:-}"
 
 # --- find the dotted patch (YYYY-MM-DD) from a pif file -------------------
@@ -37,9 +39,9 @@ done
 # the keystore attestation in lock-step with the Build/* fingerprint PIF
 # spoofs. (The module-folder path it also checks no longer exists by design.)
 if [ -n "$SRC" ] && [ "$SRC" != "/data/adb/pif.prop" ]; then
-    SRC_HASH=$(sha256sum "$SRC" 2>/dev/null | awk '{print tolower($1)}')
+    SRC_HASH=$(sha256sum "$SRC" 2>/dev/null | { read -r h _; lowercase "$h"; })
     DST_HASH=""
-    [ -s "/data/adb/pif.prop" ] && DST_HASH=$(sha256sum "/data/adb/pif.prop" 2>/dev/null | awk '{print tolower($1)}')
+    [ -s "/data/adb/pif.prop" ] && DST_HASH=$(sha256sum "/data/adb/pif.prop" 2>/dev/null | { read -r h _; lowercase "$h"; })
     if [ "$SRC_HASH" != "$DST_HASH" ]; then
         cp -f "$SRC" /data/adb/pif.prop 2>/dev/null && chmod 644 /data/adb/pif.prop 2>/dev/null
     fi
@@ -74,7 +76,7 @@ printf 'all=%s\n' "$DOT" > "$CONFIG_DIR/security_patch.txt"
 for pf in "$CONFIG_DIR/custom.pif.prop"; do
     [ -f "$pf" ] || continue
     if grep -qE '^[#]?\*\.security_patch=' "$pf"; then
-        sed -i "s|^[#]\?\*\.security_patch=.*|*.security_patch=$DOT|" "$pf"
+        $SED "s|^[#]\?\*\.security_patch=.*|*.security_patch=$DOT|" "$pf"
     else
         printf '*.security_patch=%s\n' "$DOT" >> "$pf"
     fi

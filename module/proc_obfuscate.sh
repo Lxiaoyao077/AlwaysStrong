@@ -2,14 +2,14 @@
 # proc_obfuscate.sh — /proc trace obfuscation
 #
 # Sanitizes cmdline and comm for our daemon processes so 'ps' / 'dumpsys'
-# output doesn't show AlwaysStrong-specific process names.
+# output doesn't show TieJia-specific process names.
 #
 # NOTE: .so file renaming was removed (v1.1.1+). Renaming libinject.so or
 # libTEESimulator.so breaks Zygisk injection and TEE simulator loading
 # because the dynamic linker loads libraries by their original names.
 
 MODDIR="${MODPATH:-$(dirname "$0")}"
-LOG_TAG="AlwaysStrong-proc"
+LOG_TAG="TieJia-proc"
 
 # Source common helpers (verify_proc_name)
 [ -f "$MODDIR/common_func.sh" ] && . "$MODDIR/common_func.sh"

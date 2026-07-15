@@ -9,9 +9,25 @@ unset ASH_STANDALONE
 [ -f "$MODDIR/common_func.sh" ] && . "$MODDIR/common_func.sh"
 find_sed
 
+# PID tracking for background daemons spawned by this script.
+# Each tracked PID is written to $PID_FILE for external monitoring/debugging.
+PID_FILE="$MODDIR/.tiejia_bg_pids"
+: > "$PID_FILE" 2>/dev/null  # clear stale file on each boot
+
+track_bg() {
+  local _pid=$!
+  [ "${_pid:-0}" -gt 0 ] 2>/dev/null && echo "$_pid" >> "$PID_FILE" 2>/dev/null
+  return 0
+}
+
+# Backward compat: CONFIG_DIR defined by common_func.sh as TIEJIA_CONFIG_DIR
+# but early code may use CONFIG_DIR directly. Ensure both are set.
+[ -z "${CONFIG_DIR:-}" ] && CONFIG_DIR="${TIEJIA_CONFIG_DIR:-/data/adb/tricky_store}"
+
 # --- Logcat leak prevention (early) ---
 if [ -x "$MODDIR/logcat_cleanup.sh" ]; then
     sh "$MODDIR/logcat_cleanup.sh" >/dev/null 2>&1 &
+    track_bg
 fi
 
 # --- dmesg_restrict: block non-root access to kernel log ---
@@ -136,18 +152,25 @@ settings put global development_settings_enabled 0 2>/dev/null || true
 # --- ROM fingerprint deep scrub (Specter-style keyword scan) ---
 if [ -x "$MODDIR/rom_fp_cleanup.sh" ]; then
     MODPATH="$MODDIR" sh "$MODDIR/rom_fp_cleanup.sh" >/dev/null 2>&1 &
+    track_bg
+fi
+
+# --- Boot-state property hardening (Specter-style persistent prop scan) ---
+if [ -x "$MODDIR/boot_state_props.sh" ]; then
+    MODPATH="$MODDIR" sh "$MODDIR/boot_state_props.sh" >/dev/null 2>&1 &
+    track_bg
 fi
 }&
 
 # --- Conflict re-scan on every boot ---
-# A user can install a conflicting module AFTER they've installed AlwaysStrong
+# A user can install a conflicting module AFTER they've installed TieJia
 # (the install-time scan in customize.sh only fires once). Re-run the same
 # disable-known-conflicts pass at every boot so a fresh install of e.g.
 # playintegrityfix doesn't silently break our hooks.
 if [ -x "$MODDIR/conflict_scan.sh" ]; then
     MODPATH="$MODDIR" sh "$MODDIR/conflict_scan.sh" >/dev/null 2>&1
     n=$?
-    [ "$n" -gt 0 ] && log_save "AlwaysStrong" "disabled $n conflicting module(s) at boot"
+    [ "$n" -gt 0 ] && log_save "TieJia" "disabled $n conflicting module(s) at boot"
 fi
 
 # --- Wait for boot, then start TEE simulator ---
@@ -166,11 +189,13 @@ pkill -9 -f TEESimulator 2>/dev/null || true
 # Uses partition hashes with all-zero rejection — critical for key derivation.
 if [ -x "$MODDIR/boot_hash.sh" ]; then
     MODPATH="$MODDIR" sh "$MODDIR/boot_hash.sh" >/dev/null 2>&1 &
-    log_save "AlwaysStrong" "boot hash generation started"
+    track_bg
+    log_save "TieJia" "boot hash generation started"
 fi
 
 # Fork-based supervisor + daemon (TEESimulator-RS standard pattern)
 "$MODDIR/supervisor" "$MODDIR/daemon" "$MODDIR" &
+track_bg
 
 # --- aswatcher native daemon (inotify target.txt + Xposed + conflict) ---
 case "$(uname -m)" in
@@ -185,7 +210,8 @@ if [ -x "$AS_BIN" ]; then
     {
         sleep 5
         "$AS_BIN" &
-        log_save "AlwaysStrong" "aswatcher launched ($AS_ABI)"
+        track_bg
+        log_save "TieJia" "aswatcher launched ($AS_ABI)"
     } &
 fi
 
@@ -194,7 +220,8 @@ if [ -x "$MODDIR/mount_isolation.sh" ]; then
     {
         sleep 30
         MODPATH="$MODDIR" sh "$MODDIR/mount_isolation.sh" >/dev/null 2>&1 &
-        log_save "AlwaysStrong" "mount isolation daemon started"
+        track_bg
+        log_save "TieJia" "mount isolation daemon started"
     } &
 fi
 
@@ -203,7 +230,8 @@ if [ -x "$MODDIR/proc_obfuscate.sh" ]; then
     {
         sleep 10
         MODPATH="$MODDIR" sh "$MODDIR/proc_obfuscate.sh" >/dev/null 2>&1 &
-        log_save "AlwaysStrong" "proc obfuscation daemon started"
+        track_bg
+        log_save "TieJia" "proc obfuscation daemon started"
     } &
 fi
 
@@ -212,6 +240,7 @@ if [ -x "$MODDIR/prop_unify.sh" ]; then
     {
         sleep 40
         MODPATH="$MODDIR" sh "$MODDIR/prop_unify.sh" >/dev/null 2>&1 &
+        track_bg
     } &
 fi
 
@@ -229,7 +258,7 @@ if [ -z "$CURRENT_DIGEST" ] || echo "$CURRENT_DIGEST" | grep -qE '^0+$'; then
         DIGEST=$(dd if="$VBMETA_BLK" bs=4096 count=16 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
         if [ -n "$DIGEST" ]; then
             resetprop -n ro.boot.vbmeta.digest "$DIGEST"
-            log_save "AlwaysStrong" "VBMeta digest set: ${DIGEST:0:16}..."
+            log_save "TieJia" "VBMeta digest set: ${DIGEST:0:16}..."
         fi
     fi
 fi
@@ -252,14 +281,15 @@ fi
 
 # --- TEESimulator + aswatcher watchdog ---
 {
+    track_bg
     while true; do
         sleep 120
         if ! pidof TEESimulator >/dev/null 2>&1 && ! pidof daemon >/dev/null 2>&1; then
-            log_save "AlwaysStrong" "TEE daemon died, restarting..."
+            log_save "TieJia" "TEE daemon died, restarting..."
             "$MODDIR/supervisor" "$MODDIR/daemon" "$MODDIR" &
         fi
         if [ -x "$AS_BIN" ] && ! pidof aswatcher >/dev/null 2>&1; then
-            log_save "AlwaysStrong" "aswatcher died, restarting..."
+            log_save "TieJia" "aswatcher died, restarting..."
             "$AS_BIN" &
         fi
     done
@@ -278,25 +308,28 @@ if [ ! -f "$CONFIG_DIR/.bootstrapped" ]; then
         j=$((j+1)); [ $j -gt 30 ] && break
         sleep 2
     done
-    log_save "AlwaysStrong-boot" "first boot: starting bootstrap"
+    log_save "TieJia-boot" "first boot: starting bootstrap"
 
     # 1. keybox
     if [ -x "$MODDIR/keybox_fetch.sh" ]; then
-        sh "$MODDIR/keybox_fetch.sh" 2>&1 | log -t "AlwaysStrong-boot"
+        sh "$MODDIR/keybox_fetch.sh" 2>&1 | log -t "TieJia-boot"
         # Rotate if multi-entry keybox served
-        [ -x "$MODDIR/keybox_rotate.sh" ] && MODPATH="$MODDIR" sh "$MODDIR/keybox_rotate.sh" 2>&1 | log -t "AlwaysStrong-boot"
+        [ -x "$MODDIR/keybox_rotate.sh" ] && MODPATH="$MODDIR" sh "$MODDIR/keybox_rotate.sh" 2>&1 | log -t "TieJia-boot"
     fi
 
     # 2. fingerprint + security patch (Pixel Canary via pif_native_fetch)
     if [ -x "$MODDIR/pif_native_fetch.sh" ]; then
-        sh "$MODDIR/pif_native_fetch.sh" -s -m 2>&1 | log -t "AlwaysStrong-boot"
+        sh "$MODDIR/pif_native_fetch.sh" -s -m 2>&1 | log -t "TieJia-boot"
     fi
 
     # 2b. sync the attestation/system security patch to the fresh fingerprint
-    [ -f "$MODDIR/sync_patch.sh" ] && sh "$MODDIR/sync_patch.sh" 2>&1 | log -t "AlwaysStrong-boot"
+    [ -f "$MODDIR/sync_patch.sh" ] && sh "$MODDIR/sync_patch.sh" 2>&1 | log -t "TieJia-boot"
 
     # 2c. unify product props with spoofed fingerprint (detection cross-consistency)
-    [ -x "$MODDIR/prop_unify.sh" ] && MODPATH="$MODDIR" sh "$MODDIR/prop_unify.sh" 2>&1 | log -t "AlwaysStrong-unify"
+    [ -x "$MODDIR/prop_unify.sh" ] && MODPATH="$MODDIR" sh "$MODDIR/prop_unify.sh" 2>&1 | log -t "TieJia-unify"
+
+    # 2d. cleanup target.txt (remove uninstalled/blacklisted packages)
+    [ -x "$MODDIR/target_cleanup.sh" ] && MODPATH="$MODDIR" sh "$MODDIR/target_cleanup.sh" 2>&1 | log -t "TieJia-boot"
 
     # 3. enforce STRONG-friendly settings on every produced pif.prop variant
     for CPIF in /data/adb/tricky_store/custom.pif.prop /data/adb/tricky_store/pif.prop; do
@@ -310,7 +343,7 @@ if [ ! -f "$CONFIG_DIR/.bootstrapped" ]; then
                 echo "${k}=${v}" >> "$CPIF"
             fi
         done
-        log_save "AlwaysStrong-boot" "STRONG enforced on $CPIF"
+        log_save "TieJia-boot" "STRONG enforced on $CPIF"
     done
 
     # 4. restart PI consumers so they pick up the new state
@@ -326,7 +359,7 @@ if [ ! -f "$CONFIG_DIR/.bootstrapped" ]; then
     # mark done regardless of individual step outcome — user can press
     # [Action] to retry if any step failed (e.g. no internet on first boot)
     touch "$CONFIG_DIR/.bootstrapped"
-    log_save "AlwaysStrong-boot" "bootstrap done"
+    log_save "TieJia-boot" "bootstrap done"
 }&
 fi
 
@@ -338,6 +371,7 @@ fi
 # updates are picked up naturally on the next PI invocation, so we don't
 # kick running banking apps for cosmetic refreshes.
 {
+    track_bg
     CFG=/data/adb/tricky_store
     export MODPATH="$MODDIR"
     while true; do
@@ -349,22 +383,27 @@ fi
         esac
         [ "$INT" -lt 60 ] && INT=60
         sleep "$INT"
+        # Hourly refresh — run fingerprint and keybox pipelines in parallel
+        # (they are independent: pif writes pif.prop, keybox writes keybox.xml)
         if [ ! -f "$CFG/no_auto_fp" ] && [ -x "$MODDIR/pif_native_fetch.sh" ]; then
-            sh "$MODDIR/pif_native_fetch.sh" -s -m 2>&1 | log -t "AlwaysStrong-hourly"
-            [ -f "$MODDIR/sync_patch.sh" ] && sh "$MODDIR/sync_patch.sh" 2>&1 | log -t "AlwaysStrong-hourly"
-            [ -x "$MODDIR/prop_unify.sh" ] && MODPATH="$MODDIR" sh "$MODDIR/prop_unify.sh" 2>&1 | log -t "AlwaysStrong-unify"
+            ( sh "$MODDIR/pif_native_fetch.sh" -s -m 2>&1 | log -t "TieJia-hourly"
+              [ -f "$MODDIR/sync_patch.sh" ] && sh "$MODDIR/sync_patch.sh" 2>&1 | log -t "TieJia-hourly"
+              [ -x "$MODDIR/prop_unify.sh" ] && MODPATH="$MODDIR" sh "$MODDIR/prop_unify.sh" 2>&1 | log -t "TieJia-unify"
+            ) &
         fi
         if [ ! -f "$CFG/no_auto_keybox" ] && [ -x "$MODDIR/keybox_fetch.sh" ]; then
-            kbout=$(sh "$MODDIR/keybox_fetch.sh" 2>&1)
-            kbrc=$?
-            [ -n "$kbout" ] && echo "$kbout" | log -t "AlwaysStrong-hourly"
-            if [ "$kbrc" = "0" ]; then
-                [ -x "$MODDIR/keybox_rotate.sh" ] && MODPATH="$MODDIR" sh "$MODDIR/keybox_rotate.sh" 2>&1 | log -t "AlwaysStrong-hourly"
-                log_save "AlwaysStrong-hourly" "keybox updated, restarting PI"
-                killall -9 com.google.android.gms.unstable 2>/dev/null
-                killall -9 com.android.vending 2>/dev/null
-            fi
+            ( kbout=$(sh "$MODDIR/keybox_fetch.sh" 2>&1)
+              kbrc=$?
+              [ -n "$kbout" ] && echo "$kbout" | log -t "TieJia-hourly"
+              if [ "$kbrc" = "0" ]; then
+                  [ -x "$MODDIR/keybox_rotate.sh" ] && MODPATH="$MODDIR" sh "$MODDIR/keybox_rotate.sh" 2>&1 | log -t "TieJia-hourly"
+                  log_save "TieJia-hourly" "keybox updated, restarting PI"
+                  killall -9 com.google.android.gms.unstable 2>/dev/null
+                  killall -9 com.android.vending 2>/dev/null
+              fi
+            ) &
         fi
+        wait  # finish both pipelines before status
         # Target cleanup — removes uninstalled apps from target.txt every 6h
         if [ -x "$MODDIR/target_cleanup.sh" ]; then
             LAST_CLEAN=$(cat "$CFG/.last_target_cleanup" 2>/dev/null)
@@ -376,12 +415,12 @@ fi
         fi
         # Status — independent of toggles; cheap GET, idempotent module.prop write
         if [ -x "$MODDIR/status_fetch.sh" ]; then
-            sh "$MODDIR/status_fetch.sh" 2>&1 | log -t "AlwaysStrong-hourly"
+            sh "$MODDIR/status_fetch.sh" 2>&1 | log -t "TieJia-hourly"
         fi
         # Preload JSON for WebUI — generated from module state so the UI
         # renders instantly (no per-toggle ksuExec waterfall on load).
         if [ -x "$MODDIR/status_json.sh" ]; then
-            sh "$MODDIR/status_json.sh" 2>&1 | log -t "AlwaysStrong-hourly"
+            sh "$MODDIR/status_json.sh" 2>&1 | log -t "TieJia-hourly"
         fi
     done
 }&

@@ -102,19 +102,24 @@ if [ -x "$MODPATH/build_target_txt.sh" ]; then
     _render_menu
 
     _wait=0; _done=0
-    while [ $_wait -lt 80 ]; do
-        _evt=$(getevent -lc 1 2>/dev/null)
-        if echo "$_evt" | grep -q "KEY_VOLUMEUP"; then
-            _idx=$(( (_idx + 1) % 3 ))
-            _render_menu
-        elif echo "$_evt" | grep -q "KEY_VOLUMEDOWN"; then
-            _idx=$(( (_idx - 1 + 3) % 3 ))
-            _render_menu
-        elif echo "$_evt" | grep -q "KEY_POWER"; then
-            _done=1; break
-        fi
-        sleep 0.1; _wait=$((_wait + 1))
-    done
+    # Verify getevent is accessible; skip menu if denied (some kernels block it)
+    if [ -e /dev/input/event0 ] && getevent -lc 1 /dev/input/event0 >/dev/null 2>&1; then
+        while [ $_wait -lt 80 ]; do
+            _evt=$(getevent -lc 1 2>/dev/null)
+            if echo "$_evt" | grep -q "KEY_VOLUMEUP"; then
+                _idx=$(( (_idx + 1) % 3 ))
+                _render_menu
+            elif echo "$_evt" | grep -q "KEY_VOLUMEDOWN"; then
+                _idx=$(( (_idx - 1 + 3) % 3 ))
+                _render_menu
+            elif echo "$_evt" | grep -q "KEY_POWER"; then
+                _done=1; break
+            fi
+            sleep 0.1; _wait=$((_wait + 1))
+        done
+    else
+        _wait=80  # force timeout, use current mode
+    fi
     echo ""
 
     # Resolve selection
@@ -135,7 +140,7 @@ sleep 1
 # --- Step 2: Keybox ---
 # Custom-keybox mode (WebUI toggle): user supplied their own keybox, skip fetch.
 if [ -f "$CONFIG_DIR/custom_keybox" ]; then
-    if [ -s "$CONFIG_DIR/keybox.xml" ] && head -c 4096 "$CONFIG_DIR/keybox.xml" | grep -q "Keybox"; then
+    if [ -s "$CONFIG_DIR/keybox.xml" ] && is_valid_keybox "$CONFIG_DIR/keybox.xml"; then
         row "🔑" "自定义密钥 — 跳过获取"
         row "ℹ️" "在网页界面中关闭以自动获取"
     else
@@ -306,6 +311,7 @@ if [ -d /data/adb/magisk ] && [ "$KSU" != "true" ] && [ "$APATCH" != "true" ]; t
                     chmod 644 "$T" 2>/dev/null
                     pm install -r "$T" >/dev/null 2>&1
                 fi
+            fi
             rm -f "$T" "$MODPATH/.webui_busy" 2>/dev/null
         } &
     fi

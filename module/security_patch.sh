@@ -1,8 +1,8 @@
 #!/bin/sh
-
 # Tricky Store Security Patch Util
 
-MODDIR="/data/adb/modules/tricky_store"
+MODDIR="${0%/*}"
+[ -z "$MODDIR" ] && MODDIR="/data/adb/modules/tricky_store"
 AUTO_FLAG="/data/adb/tricky_store/pif_auto_security_patch"
 
 case "$1" in
@@ -44,6 +44,9 @@ else
     SYSTEM="$SHORT_PATCH"
 fi
 
+# sed -i is not guaranteed on all recoveries/environments; use tmp file fallback
+_sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
+
 if [ "$FILE_NAME" = "security_patch.txt" ]; then
     {
         echo "system=$SYSTEM"
@@ -52,13 +55,13 @@ if [ "$FILE_NAME" = "security_patch.txt" ]; then
     } > "$TARGET_FILE"
 elif [ "$FILE_NAME" = "devconfig.toml" ]; then
     if grep -q "^securityPatch" "$TARGET_FILE"; then
-        sed -i "s/^securityPatch .*/securityPatch = \"$SECURITY_PATCH\"/" "$TARGET_FILE"
+        _sed_i "s/^securityPatch .*/securityPatch = \"$SECURITY_PATCH\"/" "$TARGET_FILE"
     else
         # This is no longer needed for newer version of qwq233 fork but keep it for compatibility
         if ! grep -q "^\\[deviceProps\\]" "$TARGET_FILE"; then
             echo "securityPatch = \"$SECURITY_PATCH\"" >> "$TARGET_FILE"
         else
-            sed -i "s/^\[deviceProps\]/securityPatch = \"$SECURITY_PATCH\"\n&/" "$TARGET_FILE"
+            _sed_i "s/^\[deviceProps\]/securityPatch = \"$SECURITY_PATCH\"\n&/" "$TARGET_FILE"
         fi
     fi
 fi

@@ -1,8 +1,8 @@
 #!/system/bin/sh
-# AlwaysStrong uninstall — clean every artifact we created.
+# TieJia uninstall — clean every artifact we created.
 
 MODDIR=${0%/*}
-CONFIG_DIR=/data/adb/tricky_store
+CONFIG_DIR="${TIEJIA_CONFIG_DIR:-/data/adb/tricky_store}"
 
 # Source common helpers (verify_proc_name)
 [ -f "$MODDIR/common_func.sh" ] && . "$MODDIR/common_func.sh"

@@ -10,7 +10,8 @@
 # up the clean file correctly.
 
 MODDIR="${MODPATH:-$(dirname "$0")}"
-CONFIG_DIR=/data/adb/tricky_store
+[ -f "$MODDIR/common_func.sh" ] && . "$MODDIR/common_func.sh"
+CONFIG_DIR="${TIEJIA_CONFIG_DIR:-/data/adb/tricky_store}"
 TARGET="$CONFIG_DIR/target.txt"
 BLACKLIST="$CONFIG_DIR/config/target_blacklist.txt"
 
@@ -43,8 +44,10 @@ while IFS= read -r line; do
   fi
 done < "$TARGET"
 
-# Ensure trailing newline
-[ -s "$TMP" ] && printf '\n' >> "$TMP"
+# Ensure exactly one trailing newline (no accumulation across runs)
+if [ -s "$TMP" ]; then
+  ensure_trailing_newline "$TMP"
+fi
 
 if ! cmp -s "$TMP" "$TARGET" 2>/dev/null; then
   mv "$TMP" "$TARGET"
@@ -60,8 +63,9 @@ if [ -f "$BLACKLIST" ] && [ -s "$BLACKLIST" ]; then
   CHANGED=0
   for bp in $(tr '\n' ' ' < "$BLACKLIST" 2>/dev/null); do
     [ -z "$bp" ] && continue
-    if grep -qE "^${bp}( |$)" "$TARGET" 2>/dev/null; then
-      $SED "/^${bp}[[:space:]]/d; /^${bp}$/d" "$TARGET"
+    bp_escaped=$(printf '%s\n' "$bp" | sed 's/[.[\*^$\\]/\\&/g')
+    if grep -qE "^${bp_escaped}([[:space:]]|\$)" "$TARGET" 2>/dev/null; then
+      $SED "/^${bp_escaped}[[:space:]]/d; /^${bp_escaped}$/d" "$TARGET"
       log "blacklist removed: $bp"
       CHANGED=1
     fi

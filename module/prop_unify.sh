@@ -14,7 +14,7 @@
 MODDIR="${MODPATH:-$(dirname "$0")}"
 CFG=/data/adb/tricky_store
 PIF="$CFG/pif.prop"
-LOG_TAG="AlwaysStrong-unify"
+LOG_TAG="TieJia-unify"
 
 log() { log -t "$LOG_TAG" "$@"; }
 
@@ -65,7 +65,8 @@ done < "$PIF"
 # If FINGERPRINT is set, parse it to extract brand/product/device
 # Format: brand/product/device:user/release_version/id/incremental:userdebug/test-keys
 # Example: google/caiman_beta/caiman:15/BP11.241121.013/13016754:user/release-keys
-if [ -n "$FINGERPRINT" ]; then
+# Guard: skip if fingerprint lacks the minimal brand/product/device: structure
+if [ -n "$FINGERPRINT" ] && echo "$FINGERPRINT" | grep -qE '^[^/]+/[^/]+/[^/:]+:'; then
   # Parse: brand / product / device:tag ...
   FP_BRAND="${FINGERPRINT%%/*}"
   AFTER_BRAND="${FINGERPRINT#*/}"      # product/device:user/...
@@ -73,6 +74,12 @@ if [ -n "$FINGERPRINT" ]; then
   AFTER_PRODUCT="${AFTER_BRAND#*/}"     # device:user/...
   FP_DEVICE_TMP="${AFTER_PRODUCT%%:*}"  # device (caiman or caiman_beta depending on format)
   FP_DEVICE="${FP_DEVICE_TMP%%/*}"      # strip any trailing / if present
+
+  # Validate: all three core fields must be non-empty after parsing
+  if [ -z "$FP_BRAND" ] || [ -z "$FP_PRODUCT" ] || [ -z "$FP_DEVICE" ]; then
+    log "fingerprint parse failed: brand='$FP_BRAND' product='$FP_PRODUCT' device='$FP_DEVICE' — skipping prop unify"
+    exit 0
+  fi
 
   # Build type from fingerprint (user/userdebug/eng)
   FP_BUILD_TYPE="user"

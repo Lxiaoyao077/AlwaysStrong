@@ -1,7 +1,12 @@
 # shellcheck disable=SC2034
 SKIPUNZIP=1
 MIN_SDK=29
-CONFIG_DIR=/data/adb/tricky_store
+CONFIG_DIR="${TIEJIA_CONFIG_DIR:-/data/adb/tricky_store}"
+
+# Extract common_func.sh early so verify_proc_name is available for the
+# kill loop below. We re-extract it later with the rest of the scripts.
+install_file "common_func.sh" "$TMPDIR"
+. "$TMPDIR/common_func.sh"
 
 if [ "$BOOTMODE" != true ]; then
   abort "install from a root manager, not recovery"
@@ -22,7 +27,7 @@ esac
 VERSION=$(grep_prop version "${TMPDIR}/module.prop")
 install_file() { unzip -qqjo "$ZIPFILE" "$1" -d "$2" || abort "extract failed: $1"; }
 
-ui_print "AlwaysStrong $VERSION"
+ui_print "TieJia $VERSION"
 ui_print "by @evokerr  -  t.me/keyboxstrong"
 ui_print ""
 

@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # ROM fingerprint scrubber — removes detectable custom-ROM traces from system
 # properties. Runs at boot (service.sh) and on [Action] button press.
-# Based on Specter's rom_fingerprint.sh, adapted for AlwaysStrong.
+# Based on Specter's rom_fingerprint.sh, adapted for TieJia.
 
 set -e
 MODDIR="${0%/*}"
@@ -53,9 +53,17 @@ for build_prop in ro.build.fingerprint ro.build.display.id \
 done
 unset build_prop val new_val prefix
 
-# --- 3. PIF spoof prop residue cleanup ---
-# (Phases 3/4 removed — service.sh LineageOS scrub handles camera
-# packagelist + lineage_health surgically, no duplication needed.)
+# --- 3. ro.modversion cleanup ---
+# Specter crom_props.sh: delete ro.modversion regardless of value.
+# Some ROMs (Lineage, crDroid, etc.) leak the ROM version here.
+if [ -n "$(resetprop ro.modversion 2>/dev/null)" ]; then
+    resetprop --delete ro.modversion 2>/dev/null || true
+    cleaned=$((cleaned + 1))
+fi
+
+# --- 4. PIF spoof prop residue cleanup ---
+# (service.sh LineageOS scrub handles camera packagelist + lineage_health
+# surgically — no duplication here.)
 # Modules like PIF/TSupport leave pihook/pixelprops/spoof/entryhooks
 # props in the runtime property space. Clean them here so they don't
 # linger after the module is removed or disabled.

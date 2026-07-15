@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# boot_hash.sh — zero-rejection boot hash priority chain for AlwaysStrong
+# boot_hash.sh — zero-rejection boot hash priority chain for TieJia
 #
 # Generates a reliable device identity hash for TEE key derivation.
 # Priority chain (first non-zero, non-trivial hash wins):
@@ -14,7 +14,7 @@
 # Exit 0: hash written to boot_hash.bin
 # Exit 1: all sources exhausted (should not happen with fallback)
 
-CONFIG_DIR=/data/adb/tricky_store
+CONFIG_DIR="${TIEJIA_CONFIG_DIR:-/data/adb/tricky_store}"
 OUT="$CONFIG_DIR/boot_hash.bin"
 SHA256="sha256sum"
 for bb in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox; do
@@ -30,7 +30,7 @@ emit_if_valid() {
   if [ -n "$hash" ] && ! is_zero "$hash"; then
     printf '%s' "$hash" > "$OUT"
     chmod 600 "$OUT"
-    log "generated from $src: ${hash:0:16}..."
+    log "generated from $src: $(echo "$hash" | cut -c1-16)..."
     return 0
   fi
   return 1

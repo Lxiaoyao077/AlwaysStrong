@@ -5,13 +5,13 @@
 # Custom ROMs (LineageOS, EvolutionX, PixelOS, …) ship their own pixel-prop /
 # pihook / entryhook spoofers that fight ours: they re-set Build.* every boot,
 # corrupt the attestation chain, and on STRONG checks the leaked extra hooks
-# get flagged. We disable the ROM engines so AlwaysStrong is the single
+# get flagged. We disable the ROM engines so TieJia is the single
 # source of truth for the spoofed fingerprint.
 #
 # Opt-out:  touch /data/adb/tricky_store/no_rom_spoof_block
 # Called from post-fs-data.sh (early, before GMS starts).
 
-CONFIG_DIR=/data/adb/tricky_store
+CONFIG_DIR="${TIEJIA_CONFIG_DIR:-/data/adb/tricky_store}"
 [ -f "$CONFIG_DIR/no_rom_spoof_block" ] && exit 0
 
 GMS_PROPS_FILE="/data/system/gms_certified_props.json"

@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# hotinstall.sh — KSU hot-install helper for AlwaysStrong
+# hotinstall.sh — KSU hot-install helper for TieJia
 #
 # Reduces the need for a full reboot after updating the module.
 # Copies new files into the live module directory and restarts
@@ -18,7 +18,7 @@ OLD_MODDIR="${MODDIR}"
 [ -f "$MODDIR/common_func.sh" ] && . "$MODDIR/common_func.sh"
 
 # ----- helpers -----
-log() { log -t "AlwaysStrong-hot" "$@"; }
+log() { log -t "TieJia-hot" "$@"; }
 die() { log "ERROR: $1"; exit 1; }
 
 # Only works on KSU

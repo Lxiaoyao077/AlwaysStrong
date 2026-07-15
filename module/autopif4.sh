@@ -27,32 +27,35 @@ case "$0" in
 esac;
 DIR=$(dirname "$(readlink -f "$DIR" 2>/dev/null || echo "$DIR")");
 [ -z "$DIR" ] && DIR=/data/adb/modules/tricky_store
+# TieJia: use shared find_busybox / find_sed from common_func.sh
+[ -f "$DIR/common_func.sh" ] && . "$DIR/common_func.sh"
 
 item() { echo "\n- $@"; }
 die() { echo "\nError: $@!"; exit 1; }
 die_bb() { die "$@, install busybox"; }
 warn() { echo "\nWarning: $@!"; }
 
+# find_busybox — sets $BUSYBOX (autopif4 convention).
+# Searches standard busybox paths directly; common_func.sh's version sets $BB
+# which we don't use here, so no bridge needed.
 find_busybox() {
-  [ -n "$BUSYBOX" ] && return 0;
-  local path;
+  [ -n "${BUSYBOX:-}" ] && return 0
   for path in /data/adb/modules/busybox-ndk/system/*/busybox /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox; do
     if [ -f "$path" ]; then
-      BUSYBOX="$path";
-      return 0;
-    fi;
-  done;
-  return 1;
+      BUSYBOX="$path"
+      return 0
+    fi
+  done
+  return 1
 }
 
-# Portable sed_i -i wrapper — toybox sed lacks -i, busybox sed always supports it.
+# Portable sed -i using common_func.sh's find_sed
 sed_i() {
-  if find_busybox; then
-    $BUSYBOX sed "$@"
+  if find_sed 2>/dev/null; then
+    $SED "$@"
   else
-    # Fallback: strip -i, write to temp, move back.
-    local args=""
-    local last=""
+    # Bare fallback: strip -i, write to temp, move back
+    local args="" last=""
     for a in "$@"; do
       [ "$a" = "-i" ] && continue
       last="$a"; args="$args $a"
@@ -95,10 +98,10 @@ fi;
 cd "$DIR";
 
 item "Crawling Android Developers for latest Pixel Beta device list ...";
-wget -q -O PIXEL_VERSIONS_HTML --no-check-certificate "https://developer.android.com/about/versions" 2>&1 || exit 1;
-wget -q -O PIXEL_LATEST_HTML --no-check-certificate "$(grep -o 'https://developer.android.com/about/versions/.*[0-9]"' PIXEL_VERSIONS_HTML | sort -ru | cut -d\" -f1 | head -n1 | tail -n1)" 2>&1 || exit 1;
-wget -q -O PIXEL_FI_HTML --no-check-certificate "https://developer.android.com$(grep -o 'href=".*download.*"' PIXEL_LATEST_HTML | grep 'qpr' | cut -d\" -f2 | head -n1 | tail -n1)" 2>&1 || exit 1;
-wget -q -O PIXEL_OTA_HTML --no-check-certificate "https://developer.android.com$(grep -o 'href=".*download-ota.*"' PIXEL_LATEST_HTML | grep 'qpr' | cut -d\" -f2 | head -n1 | tail -n1)" 2>&1 || exit 1;
+wget -q -T 30 -O PIXEL_VERSIONS_HTML --no-check-certificate "https://developer.android.com/about/versions" 2>&1 || exit 1;
+wget -q -T 30 -O PIXEL_LATEST_HTML --no-check-certificate "$(grep -o 'https://developer.android.com/about/versions/.*[0-9]"' PIXEL_VERSIONS_HTML | sort -ru | cut -d\" -f1 | head -n1 | tail -n1)" 2>&1 || exit 1;
+wget -q -T 30 -O PIXEL_FI_HTML --no-check-certificate "https://developer.android.com$(grep -o 'href=".*download.*"' PIXEL_LATEST_HTML | grep 'qpr' | cut -d\" -f2 | head -n1 | tail -n1)" 2>&1 || exit 1;
+wget -q -T 30 -O PIXEL_OTA_HTML --no-check-certificate "https://developer.android.com$(grep -o 'href=".*download-ota.*"' PIXEL_LATEST_HTML | grep 'qpr' | cut -d\" -f2 | head -n1 | tail -n1)" 2>&1 || exit 1;
 SRC=FI; [ "$(grep 'tr id=' PIXEL_FI_HTML | sed 's;.*<tr id="\(.*\)">.*;\1;' | wc -w)" -lt "$(grep 'tr id=' PIXEL_OTA_HTML | sed 's;.*<tr id="\(.*\)">.*;\1;' | wc -w)" ] && SRC=OTA;
 MODEL_LIST="$(grep -A1 'tr id=' PIXEL_${SRC}_HTML | grep 'td' | sed 's;.*<td>\(.*\)</td>.*;\1;')";
 PRODUCT_LIST="$(grep 'tr id=' PIXEL_${SRC}_HTML | sed 's;.*<tr id="\(.*\)">.*;\1_beta;')";
@@ -117,7 +120,9 @@ item "Selecting Pixel Beta device ...";
 if [ -z "$PRODUCT" ]; then
   set_random_beta() {
     local list_count="$(echo "$MODEL_LIST" | wc -l)";
-    local list_rand="$((RANDOM % $list_count + 1))";
+    local seed="${RANDOM:-$(head -c4 /dev/urandom 2>/dev/null | od -An -tu4 | tr -d ' ')}"
+    [ -z "$seed" ] && seed="$$"
+    local list_rand="$((seed % list_count + 1))";
     local IFS=$'\n';
     set -- $MODEL_LIST;
     MODEL="$(eval echo \${$list_rand})";
@@ -130,8 +135,8 @@ fi;
 echo "$MODEL ($PRODUCT)";
 
 item "Crawling Android Flash Tool for latest Pixel Canary build info ...";
-wget -q -O PIXEL_FLASH_HTML --no-check-certificate "https://flash.android.com/" 2>&1 || exit 1;
-wget -q -O PIXEL_STATION_JSON --header "Referer: https://flash.android.com" --no-check-certificate "https://content-flashstation-pa.googleapis.com/v1/builds?product=$PRODUCT&key=$(grep -o '<body data-client-config=.*' PIXEL_FLASH_HTML | cut -d\; -f2 | cut -d\& -f1)" 2>&1 || exit 1;
+wget -q -T 30 -O PIXEL_FLASH_HTML --no-check-certificate "https://flash.android.com/" 2>&1 || exit 1;
+wget -q -T 30 -O PIXEL_STATION_JSON --header "Referer: https://flash.android.com" --no-check-certificate "https://content-flashstation-pa.googleapis.com/v1/builds?product=$PRODUCT&key=$(grep -o '<body data-client-config=.*' PIXEL_FLASH_HTML | cut -d\; -f2 | cut -d\& -f1)" 2>&1 || exit 1;
 tac PIXEL_STATION_JSON | grep -m1 -A13 '"canary": true' > PIXEL_CANARY_JSON;
 ID="$(grep 'releaseCandidateName' PIXEL_CANARY_JSON | cut -d\" -f4)";
 INCREMENTAL="$(grep 'buildId' PIXEL_CANARY_JSON | cut -d\" -f4)";
@@ -142,17 +147,22 @@ FI="$(grep 'factoryImageDownloadUrl' PIXEL_CANARY_JSON | cut -d\" -f4)";
 FI_HOST="$(echo "$FI" | sed 's;^.*://\(.*\)$;\1;' | cut -d/ -f1)";
 FI_PATH="/$(echo "$FI" | sed 's;^.*://\(.*\)$;\1;' | cut -d/ -f2-)";
 if [ "$FI" -a "$FI_HOST" -a "$FI_PATH" ]; then
-  nc $FI_HOST 80 <<EOF | tr -d '\r' > PIXEL_ZIP_HEADERS;
+  # nc is rare on Android; prefer wget. Fallback to nc if wget absent.
+  if command -v wget >/dev/null 2>&1; then
+    wget -q -T 30 -S --spider -o PIXEL_ZIP_HEADERS --no-check-certificate "$FI" 2>&1
+  elif command -v nc >/dev/null 2>&1; then
+    nc $FI_HOST 80 <<EOF | tr -d '\r' > PIXEL_ZIP_HEADERS;
 HEAD $FI_PATH HTTP/1.1
 Host: $FI_HOST
 Connection: close
 
 EOF
+  fi
 else
   warn "Failed to extract Factory Image URL from JSON";
 fi;
 if [ ! -s PIXEL_ZIP_HEADERS ] || ! grep -q 'Last-Modified' PIXEL_ZIP_HEADERS; then
-  wget -q -S --spider -o PIXEL_ZIP_HEADERS --no-check-certificate "$FI" 2>&1;
+  wget -q -T 30 -S --spider -o PIXEL_ZIP_HEADERS --no-check-certificate "$FI" 2>&1;
 fi;
 if [ -f PIXEL_ZIP_HEADERS ] && grep -q 'Last-Modified' PIXEL_ZIP_HEADERS; then
   CANARY_REL_DATE="$(date -D '%a, %d %b %Y %H:%M:%S %Z' -d "$(grep -o 'Last-Modified.*' PIXEL_ZIP_HEADERS | cut -d\  -f2-)" '+%Y-%m-%d')";
@@ -168,7 +178,7 @@ fi;
 item "Crawling Pixel Update Bulletins for corresponding security patch level ...";
 CANARY_ID="$(grep '"id"' PIXEL_CANARY_JSON | sed -e 's;.*canary-\(.*\)".*;\1;' -e 's;^\(.\{4\}\);\1-;')";
 [ -z "$CANARY_ID" ] && die "Failed to extract build info from JSON";
-wget -q -O PIXEL_SECBULL_HTML --no-check-certificate "https://source.android.com/docs/security/bulletin/pixel" 2>&1 || exit 1;
+wget -q -T 30 -O PIXEL_SECBULL_HTML --no-check-certificate "https://source.android.com/docs/security/bulletin/pixel" 2>&1 || exit 1;
 SECURITY_PATCH="$(grep "<td>$CANARY_ID" PIXEL_SECBULL_HTML | sed 's;.*<td>\(.*\)</td>;\1;')";
 if [ -z "$SECURITY_PATCH" ]; then
   warn "Failed to determine exact security patch level from Pixel Update Bulletins";

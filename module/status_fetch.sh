@@ -5,7 +5,7 @@
 #   strip: remove indicator.txt.
 #   (no arg): inspect local keybox and update indicator.txt.
 
-CONFIG_DIR=/data/adb/tricky_store
+CONFIG_DIR="${TIEJIA_CONFIG_DIR:-/data/adb/tricky_store}"
 INDICATOR="$CONFIG_DIR/indicator.txt"
 
 if [ "$1" = "strip" ]; then

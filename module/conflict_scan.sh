@@ -1,16 +1,16 @@
 #!/system/bin/sh
-# conflict_scan.sh — runtime conflict scanner for AlwaysStrong
+# conflict_scan.sh — runtime conflict scanner for TieJia
 # Parses conflicts.txt (Specter-style declarative format) and acts on
 # each entry according to its type: aggressive / moderate / passive.
 #
 # Called by service.sh on every boot so that a conflicting module
-# installed after AlwaysStrong gets caught without a re-flash.
+# installed after TieJia gets caught without a re-flash.
 # Returns the number of modules that were newly handled this run.
 
 MODDIR="${MODPATH:-$(dirname "$0")}"
-CFG=/data/adb/tricky_store
+CFG="${TIEJIA_CONFIG_DIR:-/data/adb/tricky_store}"
 CONF_FILE="${CFG}/config/conflicts.txt"
-LOG_TAG="AlwaysStrong"
+LOG_TAG="TieJia"
 
 # ----- helpers -----
 now_epoch() { date +%s; }
@@ -50,10 +50,9 @@ while IFS= read -r line; do
   esac
 
   # parse: id|display|type|features|script1,script2,...
-  OLDIFS="$IFS"; IFS='|'
-  set -- $line
-  IFS="$OLDIFS"
-  id="$1"; disp="$2"; type="$3"; features="$4"; scripts_list="$5"
+  IFS='|' read -r id disp type features scripts_list <<EOF
+$line
+EOF
 
   # validate
   [ -z "$id" ] && continue

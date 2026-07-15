@@ -1,4 +1,6 @@
 #!/bin/sh
+# LEGACY FALLBACK — superseded by pif_native_fetch.sh (Chromium), autopif4.sh (Pixel Beta).
+# Retained as last-resort offline/direct-curl fallback. Do not remove.
 
 PATH=/data/adb/ap/bin:/data/adb/ksu/bin:/data/adb/magisk:/data/data/com.termux/files/usr/bin:$PATH
 SELF_DIR=$(cd "${0%/*}" 2>/dev/null && pwd)
@@ -8,6 +10,12 @@ version=$(grep "^version=" $MODDIR/module.prop 2>/dev/null | sed 's/version=//g'
 [ -z "$version" ] && version="?"
 
 . $MODDIR/common_func.sh
+
+# LEGACY: this script hard-depends on busybox; bail early if missing
+if ! command -v busybox >/dev/null 2>&1; then
+  echo "Error: autopif.sh (LEGACY) requires busybox but it's not found."
+  exit 1
+fi
 
 # lets try to use tmpfs for processing
 TEMPDIR="$MODDIR/temp" #fallback
@@ -156,7 +164,7 @@ rm -rf "$TEMPDIR"
 
 for i in $(busybox pidof com.google.android.gms.unstable com.android.vending); do
 	# PID reuse guard before signalling PI consumers
-	verify_proc_name "$i" "android" || continue
+	verify_proc_name "$i" "com.android" || continue
 	echo "- Killing pid $i"
 	kill -9 "$i"
 done

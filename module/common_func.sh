@@ -1,6 +1,114 @@
-# Shared helper functions for AlwaysStrong module scripts.
+# Shared helper functions for TieJia module scripts.
 # Merged from PlayIntegrityFix v4.7-inject-s (download/download_fail/sleep_pause)
-# and AlwaysStrong enhancements (find_tool, delprop_if_exist, resetprop_hexpatch).
+# and TieJia enhancements (find_tool, delprop_if_exist, resetprop_hexpatch).
+
+# === Global constants ===
+export TIEJIA_CONFIG_DIR=/data/adb/tricky_store
+
+# === Portable lowercase (busybox awk lacks tolower) ===
+# lowercase <string> — echoes lowercase version using tr.
+# Falls back to sed if tr -dc causes issues on toybox.
+lowercase() {
+  local _s="$1"
+  if echo A | tr 'A-Z' 'a-z' >/dev/null 2>&1; then
+    echo "$_s" | tr 'A-Z' 'a-z'
+  else
+    echo "$_s" | sed 'y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/'
+  fi
+}
+
+# === ABI detection ===
+# detect_abi — sets global ABI_DIR (arm64-v8a / armeabi-v7a / x86_64 / x86) and
+# ABI_BIN_DIR=$MODDIR/bin/$ABI_DIR. Returns 0 on ARM, 1 on others.
+detect_abi() {
+  case "$(uname -m)" in
+    aarch64)       ABI_DIR=arm64-v8a ;;
+    armv7*|armv8l) ABI_DIR=armeabi-v7a ;;
+    x86_64)        ABI_DIR=x86_64 ;;
+    i?86)          ABI_DIR=x86 ;;
+    *)             ABI_DIR="" ;;
+  esac
+  ABI_BIN_DIR="${MODDIR:-$MODPATH}/bin/$ABI_DIR"
+  case "$ABI_DIR" in arm64-v8a|armeabi-v7a) return 0 ;; *) return 1 ;; esac
+}
+
+# === Unified busybox finder ===
+# find_busybox — sets global BB to the first working busybox path.
+# Searches: busybox-ndk > magisk > ksu > apatch.
+find_busybox() {
+  [ -n "${BB:-}" ] && return 0
+  for _p in /data/adb/modules/busybox-ndk/system/*/busybox \
+            /data/adb/magisk/busybox /data/adb/ksu/bin/busybox \
+            /data/adb/ap/bin/busybox; do
+    [ -f "$_p" ] && BB="$_p" && return 0
+  done
+  return 1
+}
+
+# === Unified URL fetcher ===
+# fetch_url <output_file> <url> [referer] [timeout_sec]
+# Tries engines in priority: asfetch → curl → wget → busybox wget.
+# Respects http_proxy/ALL_PROXY env vars. Returns 0 on success.
+fetch_url() {
+  _fo="$1"; _fu="$2"; _fref="${3:-}"; _fto="${4:-15}"
+  rm -f "$_fo"
+
+  # asfetch (native TLS, no proxy) — skip if proxy is active
+  if [ -z "${http_proxy:-}${ALL_PROXY:-}" ] && [ -n "${ABI_DIR:-}" ] \
+     && [ -x "${ABI_BIN_DIR:-}/asfetch" ]; then
+    if [ -n "$_fref" ]; then
+      "${ABI_BIN_DIR}/asfetch" -T "$_fto" -H "Referer: $_fref" -o "$_fo" "$_fu" 2>/dev/null
+    else
+      "${ABI_BIN_DIR}/asfetch" -T "$_fto" -o "$_fo" "$_fu" 2>/dev/null
+    fi
+    [ -s "$_fo" ] && return 0
+  fi
+
+  # curl
+  if command -v curl >/dev/null 2>&1; then
+    rm -f "$_fo"
+    if [ -n "$_fref" ]; then
+      curl -fsSL --max-time "$_fto" -e "$_fref" -o "$_fo" "$_fu" 2>/dev/null
+    else
+      curl -fsSL --max-time "$_fto" -o "$_fo" "$_fu" 2>/dev/null
+    fi
+    [ -s "$_fo" ] && return 0
+  fi
+
+  # system wget
+  if command -v wget >/dev/null 2>&1; then
+    rm -f "$_fo"
+    if [ -n "$_fref" ]; then
+      wget -q -T "$_fto" --header "Referer: $_fref" -O "$_fo" "$_fu" 2>/dev/null
+    else
+      wget -q -T "$_fto" -O "$_fo" "$_fu" 2>/dev/null
+    fi
+    [ -s "$_fo" ] && return 0
+  fi
+
+  # busybox wget
+  if find_busybox; then
+    rm -f "$_fo"
+    if [ -n "$_fref" ]; then
+      "$BB" wget -q -T "$_fto" --header "Referer: $_fref" --no-check-certificate -O "$_fo" "$_fu" 2>/dev/null
+    else
+      "$BB" wget -q -T "$_fto" --no-check-certificate -O "$_fo" "$_fu" 2>/dev/null
+    fi
+    [ -s "$_fo" ] && return 0
+  fi
+  return 1
+}
+
+# === Portable trailing newline guard ===
+# ensure_trailing_newline <file> — appends \n if missing. No od dependency.
+ensure_trailing_newline() {
+  local _f="$1"
+  [ -s "$_f" ] || return 0
+  # Read last byte: if not 0x0a, append newline
+  local _last
+  _last=$(tail -c1 "$_f" 2>/dev/null | tr '\n' 'X')
+  [ "$_last" != "X" ] && printf '\n' >> "$_f"
+}
 
 # delprop_if_exist <prop name>
 delprop_if_exist() {
@@ -67,6 +175,27 @@ if [ "$(getprop sys.boot_completed)" != "1" ]; then
     ui_print() { return; }
 fi
 
+# --- TieJia: load_proxy ---
+# Reads config/proxy.conf and exports http_proxy / https_proxy env vars.
+# Call this before any network fetch if you need proxy support.
+load_proxy() {
+    local cf="${MODDIR:-$MODPATH}/config/proxy.conf"
+    [ -f "$cf" ] || return 1
+    local host port auth
+    host=$(grep -E '^PROXY_HOST=' "$cf" 2>/dev/null | cut -d= -f2-)
+    port=$(grep -E '^PROXY_PORT=' "$cf" 2>/dev/null | cut -d= -f2-)
+    auth=$(grep -E '^PROXY_AUTH=' "$cf" 2>/dev/null | cut -d= -f2-)
+    [ -z "$host" ] || [ -z "$port" ] && return 1
+    if [ -n "$auth" ]; then
+        export http_proxy="http://${auth}@${host}:${port}"
+        export https_proxy="http://${auth}@${host}:${port}"
+    else
+        export http_proxy="http://${host}:${port}"
+        export https_proxy="http://${host}:${port}"
+    fi
+    return 0
+}
+
 # --- PIF: sleep_pause / download_fail / download (from v4.7-inject-s) ---
 sleep_pause() {
     # APatch and KernelSU needs this
@@ -95,12 +224,12 @@ download_fail() {
     exit 1
 }
 
-download() { busybox wget -T 10 --no-check-certificate -qO - "$1" > "$2" || download_fail "$1"; }
+download() { load_proxy; busybox wget -T 10 --no-check-certificate -qO - "$1" > "$2" || download_fail "$1"; }
 if command -v curl > /dev/null 2>&1; then
-    download() { curl --connect-timeout 10 -s "$1" > "$2" || download_fail "$1"; }
+    download() { load_proxy; curl --connect-timeout 10 -s "$1" > "$2" || download_fail "$1"; }
 fi
 
-# --- AlwaysStrong: find_tool ---
+# --- TieJia: find_tool ---
 # find_tool <cmd> <subcmd> <test_expr>
 # Searches for a CLI tool (command or busybox subcommand).
 #   $1 — command name (e.g. "base64" / "sha256sum")
@@ -133,7 +262,7 @@ find_tool() {
     return 1
 }
 
-# --- AlwaysStrong: find_sed (portable sed -i) ---
+# --- TieJia: find_sed (portable sed -i) ---
 # Resolves a sed binary with reliable -i support.
 # toybox sed (AOSP default) lacks -i; busybox sed always supports it.
 # Sets global $SED to e.g. "sed -i" or "/data/adb/magisk/busybox sed -i".
@@ -145,7 +274,7 @@ find_sed() {
   return 1
 }
 
-# --- AlwaysStrong: verify_proc_name (PID reuse guard) ---
+# --- TieJia: verify_proc_name (PID reuse guard) ---
 # verify_proc_name <pid> <proc_name_pattern>
 # Returns 0 if /proc/<pid>/cmdline contains <proc_name_pattern>, 1 otherwise.
 # Prevents acting on stale PIDs where a different process reused the same PID
@@ -164,7 +293,16 @@ verify_proc_name() {
     esac
 }
 
-# --- AlwaysStrong: log_save ---
+# --- TieJia: verify_proc_name ---
+#--- TieJia: is_valid_keybox ---
+# is_valid_keybox <path> — returns 0 if file looks like a valid keybox XML
+is_valid_keybox() {
+    local kbf="${1:-/data/adb/tricky_store/keybox.xml}"
+    [ -s "$kbf" ] || return 1
+    head -c 4096 "$kbf" 2>/dev/null | grep -qi -e 'Keybox' -e 'AndroidAttestation'
+}
+
+# --- TieJia: log_save ---
 # Private log fallback: persist.log.tag.* may suppress logd output,
 # so we tee to $MODDIR/logs/module.log with restricted permissions.
 # Usage: log_save <tag> <message...>

@@ -52,9 +52,11 @@ isolate_process() {
     rm -rf '$CLEAN_DIR' 2>/dev/null
     mkdir -p '$CLEAN_DIR' 2>/dev/null || exit 1
     mount -t tmpfs tmpfs '$CLEAN_DIR' 2>/dev/null || exit 1
-    echo 'com.google.android.gms
+    _salt=$(date +%s%N 2>/dev/null | sha256sum 2>/dev/null | cut -c1-8 || echo $(od -An -N4 -tu4 /dev/urandom 2>/dev/null | tr -d ' '))
+    echo "com.google.android.gms
 io.github.vvb2060.keyattestation
-io.github.vvb2060.mahoshojo' > '$CLEAN_DIR/target.txt'
+io.github.vvb2060.mahoshojo
+# $_salt" > '$CLEAN_DIR/target.txt'
     mount --bind '$CLEAN_DIR' '$CFG' 2>/dev/null || exit 1
     touch '$CLEAN_DIR/.isolated' 2>/dev/null
   " 2>/dev/null

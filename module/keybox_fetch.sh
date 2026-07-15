@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# AlwaysStrong — keybox auto-fetch (multi-source).
+# TieJia — keybox auto-fetch (multi-source).
 #
 # Sources are tried in priority order until one succeeds:
 #   1. Yurikey  (base64)
@@ -14,7 +14,7 @@
 #   2  no change / skipped (custom keybox active, or bundled up-to-date)
 #   1  all sources failed (existing keybox preserved)
 
-CONFIG_DIR=/data/adb/tricky_store
+CONFIG_DIR="${TIEJIA_CONFIG_DIR:-/data/adb/tricky_store}"
 TARGET="$CONFIG_DIR/keybox.xml"
 
 log() { echo "keybox_fetch: $*"; }
@@ -29,8 +29,23 @@ fi
 SELF_DIR=$(cd "${0%/*}" 2>/dev/null && pwd)
 [ -z "$SELF_DIR" ] && SELF_DIR=/data/adb/modules/tricky_store
 [ -f "$SELF_DIR/common_func.sh" ] && . "$SELF_DIR/common_func.sh"
-resolve_asfetch "$SELF_DIR"
-resolve_bb
+
+# resolve_asfetch — detect ABI and set $ASFETCH path
+case "$(uname -m)" in
+    aarch64)        ABI=arm64-v8a ;;
+    armv7*|armv8l)  ABI=armeabi-v7a ;;
+    x86_64)         ABI=x86_64 ;;
+    i?86)           ABI=x86 ;;
+    *)              ABI="" ;;
+esac
+ASFETCH="$SELF_DIR/bin/$ABI/asfetch"
+
+# resolve_bb — find any working busybox
+BB=""
+for p in /data/adb/modules/busybox-ndk/system/*/busybox /data/adb/magisk/busybox \
+         /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox; do
+    [ -f "$p" ] && BB="$p" && break
+done
 
 # run_engine NAME OUTFILE URL — one download attempt with the named engine.
 run_engine() {
@@ -152,9 +167,9 @@ try_one_source() {
     log "    $__src: valid keybox ($(wc -c < "$TMP/keybox.xml") bytes)."
 
     SHA256=$(resolve_sha256) || { log "    no sha256sum."; return 1; }
-    NEW_HASH=$($SHA256 < "$TMP/keybox.xml" | awk '{print tolower($1)}')
+    NEW_HASH=$($SHA256 < "$TMP/keybox.xml" | { read -r h _; lowercase "$h"; })
     DISK_HASH=""
-    [ -s "$TARGET" ] && DISK_HASH=$($SHA256 < "$TARGET" | awk '{print tolower($1)}')
+    [ -s "$TARGET" ] && DISK_HASH=$($SHA256 < "$TARGET" | { read -r h _; lowercase "$h"; })
 
     if [ -n "$DISK_HASH" ] && [ "$DISK_HASH" = "$NEW_HASH" ]; then
         log "    $__src: already up to date."

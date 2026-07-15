@@ -1,11 +1,11 @@
-# AlwaysStrong conflict resolution — Specter-style declarative format
+# TieJia conflict resolution — Specter-style declarative format
 # id|display_name|type|features|scripts
 #
 # type: aggressive   (remove module + disable marker + rm -rf)
 #        moderate    (disable conflicting scripts only)
 #        passive     (log warning, user toggles in WebUI)
 #
-# Features tell the resolver what AlwaysStrong capabilities a conflict
+# Features tell the resolver what TieJia capabilities a conflict
 # overlaps with, so we can decide whether to disable just that feature
 # or the whole conflicting module. Currently unused — reserved for
 # future granular conflict resolution.
@@ -34,7 +34,7 @@ tsupport-advance|TSupport-Advance|passive|security_patch,target|/data/adb/module
 playcurl|Playcurl|aggressive||/data/adb/modules/playcurl/service.sh
 playcurlNEXT|Playcurl Next|aggressive||/data/adb/modules/playcurlNEXT/service.sh
 
-# Tee simulator forks — AlwaysStrong ships its own TEESimulator-RS
+# Tee simulator forks — TieJia ships its own TEESimulator-RS
 tee_simulator|TEE Simulator|aggressive|tee|/data/adb/modules/tee_simulator/service.sh
 TEESimulator|TEESimulator|aggressive|tee|/data/adb/modules/TEESimulator/service.sh
 TEESimulator-RS|TEESimulator-RS|aggressive|tee|/data/adb/modules/TEESimulator-RS/service.sh

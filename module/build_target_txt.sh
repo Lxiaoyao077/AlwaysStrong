@@ -110,6 +110,8 @@ is_installed() { printf '%s\n' "$ALL" | grep -Fxq "$1"; }
     done
 } | while read -r pkg; do
     [ -z "$pkg" ] && continue
+    # Guard: valid Android package names must contain at least one dot
+    case "$pkg" in *.*) ;; *) continue ;; esac
     # In force/certchain mode, append suffix to every non-forced package
     case "$pkg" in
         *[?!]) printf '%s\n' "$pkg" ;;
