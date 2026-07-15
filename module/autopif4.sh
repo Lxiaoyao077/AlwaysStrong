@@ -229,7 +229,7 @@ if [ -f "$MIGRATE" ]; then
     done;
   fi;
   [ "$PATCH_COMMENT" ] && sed_i -i 's;\*.security_patch;#\*.security_patch;' custom.pif.prop;
-  printf '\n# Canary Released: %s\n' $CANARY_REL_DATE\n# Estimated Expiry: $CANARY_EXP_DATE" >> custom.pif.prop;
+  printf '\n# Canary Released: %s\n# Estimated Expiry: %s\n' "$CANARY_REL_DATE" "$CANARY_EXP_DATE" >> custom.pif.prop;
   cat custom.pif.prop;
 fi;
 
