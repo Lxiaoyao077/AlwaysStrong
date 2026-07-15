@@ -266,11 +266,11 @@ if [ ! -f "$CONFIG_DIR/.bootstrapped" ]; then
     #    crawl hangs on some devices) is the fallback. Both produce custom.pif.prop.
     FP_DONE=0
     if [ -x "$MODDIR/pif_native_fetch.sh" ]; then
-        sh "$MODDIR/pif_native_fetch.sh" >/data/adb/tricky_store/autopif.log 2>&1 && FP_DONE=1
-        cat /data/adb/tricky_store/autopif.log 2>/dev/null | log -t "AlwaysStrong-boot"
+        sh "$MODDIR/pif_native_fetch.sh" >/data/adb/tricky_store/autopif_native.log 2>&1 && FP_DONE=1
+        cat /data/adb/tricky_store/autopif_native.log /data/adb/tricky_store/autopif_fallback.log 2>/dev/null | log -t "AlwaysStrong-boot"
     fi
     if [ "$FP_DONE" = 0 ] && [ -f "$MODDIR/autopif4.sh" ]; then
-        sh "$MODDIR/autopif4.sh" -s -m 2>&1 | log -t "AlwaysStrong-boot"
+        sh "$MODDIR/autopif4.sh" -s -m >/data/adb/tricky_store/autopif_fallback.log 2>&1 | log -t "AlwaysStrong-boot"
     fi
 
     # 2b. sync the attestation/system security patch to the fresh fingerprint
@@ -334,11 +334,11 @@ fi
         if [ ! -f "$CFG/no_auto_fp" ]; then
             FP_DONE=0
             if [ -x "$MODDIR/pif_native_fetch.sh" ]; then
-                sh "$MODDIR/pif_native_fetch.sh" >"$CFG/autopif.log" 2>&1 && FP_DONE=1
-                cat "$CFG/autopif.log" 2>/dev/null | log -t "AlwaysStrong-hourly"
+                sh "$MODDIR/pif_native_fetch.sh" >"$CFG/autopif_native.log" 2>&1 && FP_DONE=1
+                cat "$CFG/autopif_native.log" "$CFG/autopif_fallback.log" 2>/dev/null | log -t "AlwaysStrong-hourly"
             fi
             if [ "$FP_DONE" = 0 ] && [ -f "$MODDIR/autopif4.sh" ]; then
-                sh "$MODDIR/autopif4.sh" -s -m 2>&1 | log -t "AlwaysStrong-hourly"
+                sh "$MODDIR/autopif4.sh" -s -m >"$CFG/autopif_fallback.log" 2>&1 | log -t "AlwaysStrong-hourly"
             fi
             [ -f "$MODDIR/sync_patch.sh" ] && sh "$MODDIR/sync_patch.sh" 2>&1 | log -t "AlwaysStrong-hourly"
             # enforce STRONG spoof settings — migrate.sh (run by native fetch /
