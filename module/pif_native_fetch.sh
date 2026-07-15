@@ -2,7 +2,7 @@
 # AlwaysStrong — primary fingerprint fetch.
 #
 # Unified fingerprint fetcher: replaces autopif.sh and pif_native_fetch.sh.
-# Crawls Google's Pixel build servers (developer.android.com → flash.android.com
+# Crawls Google's Pixel build servers (developer.android.google.cn → flash.android.com
 # → content-flashstation-pa.googleapis.com → source.android.com), driven by
 # our statically-linked rustls fetcher (asfetch) with curl / busybox wget
 # fallback. asfetch speaks TLS 1.2/1.3 correctly everywhere, avoiding the
@@ -120,19 +120,19 @@ mkdir -p "$W" || { log "cannot create work dir."; exit 1; }
 trap '[ "$DEBUG" = 1 ] || rm -rf "$W"' EXIT INT TERM
 
 # ---- 1. latest Pixel Beta device list (Android Developers) ----
-step "fetching developer.android.com versions page"
-fetch "$W/versions.html" "https://developer.android.com/about/versions" || {
-    log "[STEP 1 FAIL] developer.android.com unreachable"; exit 1; }
-LATEST_URL=$($GREP -o 'https://developer.android.com/about/versions/.*[0-9]"' "$W/versions.html" \
+step "fetching developer.android.google.cn versions page"
+fetch "$W/versions.html" "https://developer.android.google.cn/about/versions" || {
+    log "[STEP 1 FAIL] developer.android.google.cn unreachable"; exit 1; }
+LATEST_URL=$($GREP -o 'https://developer.android.google.cn/about/versions/.*[0-9]"' "$W/versions.html" \
     | sort -ru | cut -d'"' -f1 | head -n1)
-[ -z "$LATEST_URL" ] && { log "[STEP 1 FAIL] no version link found on developer.android.com — page format changed?"; exit 1; }
-fetch "$W/latest.html" "$LATEST_URL" || { log "[STEP 2 FAIL] version detail page unreachable"; exit 1; }
+[ -z "$LATEST_URL" ] && { log "[STEP 1 FAIL] no version link found on developer.android.google.cn — page format changed?"; exit 1; }
+fetch "$W/latest.html" "https://developer.android.google.cn$LATEST_URL" || { log "[STEP 2 FAIL] version detail page unreachable"; exit 1; }
 
 step "parsing device table from version page"
 FI_HREF=$($GREP -o 'href=".*download.*"' "$W/latest.html" | $GREP 'qpr' | cut -d'"' -f2 | head -n1)
 OTA_HREF=$($GREP -o 'href=".*download-ota.*"' "$W/latest.html" | $GREP 'qpr' | cut -d'"' -f2 | head -n1)
-[ -n "$FI_HREF" ]  && fetch "$W/fi.html"  "https://developer.android.com$FI_HREF"
-[ -n "$OTA_HREF" ] && fetch "$W/ota.html" "https://developer.android.com$OTA_HREF"
+[ -n "$FI_HREF" ]  && fetch "$W/fi.html"  "https://developer.android.google.cn$FI_HREF"
+[ -n "$OTA_HREF" ] && fetch "$W/ota.html" "https://developer.android.google.cn$OTA_HREF"
 
 # Pick whichever table (Factory Image vs OTA) lists more devices.
 SRC=fi
@@ -204,7 +204,7 @@ KEY=$($GREP -o '<body data-client-config=.*' "$W/flash.html" | cut -d';' -f2 | c
 
 fetch "$W/station.json" \
     "https://content-flashstation-pa.googleapis.com/v1/builds?product=$PRODUCT&key=$KEY" \
-    "https://flash.android.com" || { log "[STEP 3 FAIL] flashstation API unreachable (product=$PRODUCT)"; exit 1; }
+    "https://flash.android.com" || { log "[STEP 3 FAIL] flashstation API unreachable — Google blocked in China, use VPN/proxy (product=$PRODUCT)"; exit 1; }
 
 reverse < "$W/station.json" | $GREP -m1 -A13 '"canary": true' > "$W/canary.json"
 ID=$($GREP 'releaseCandidateName' "$W/canary.json" | cut -d'"' -f4)
@@ -216,7 +216,7 @@ step "extracting canary build from station.json"
 CANARY_ID=$($GREP '"id"' "$W/canary.json" | sed -e 's;.*canary-\(.*\)".*;\1;' -e 's;^\(.\{4\}\);\1-;')
 SECURITY_PATCH=""
 if [ -n "$CANARY_ID" ]; then
-    if fetch "$W/secbull.html" "https://source.android.com/docs/security/bulletin/pixel"; then
+    if fetch "$W/secbull.html" "https://source.android.google.cn/docs/security/bulletin/pixel"; then
         SECURITY_PATCH=$($GREP "<td>$CANARY_ID" "$W/secbull.html" | sed 's;.*<td>\(.*\)</td>;\1;' | head -n1)
     fi
     # autopif4's own fallback: assume the -05 patch for the canary month.
