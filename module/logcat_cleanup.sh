@@ -39,8 +39,8 @@ scrub_logcat() {
   local changed=0
 
   for buf in main system crash events; do
-    if logcat -b "$buf" -d 2>/dev/null | grep -qiE "AlwaysStrong|TEESimulator|aswatcher" 2>/dev/null; then
-      logcat -b "$buf" -d 2>/dev/null | sed -E '/AlwaysStrong|TEESimulator|aswatcher/Id' > "$tmp" 2>/dev/null
+    if logcat -b "$buf" -d 2>/dev/null | grep -qiE "AlwaysStrong|TEESimulator|aswatcher" >/dev/null 2>&1; then
+      logcat -b "$buf" -d 2>/dev/null | grep -viE 'AlwaysStrong|TEESimulator|aswatcher' > "$tmp" 2>/dev/null
       if [ -s "$tmp" ]; then
         logcat -b "$buf" -c 2>/dev/null
         cat "$tmp" | while IFS= read -r line; do
