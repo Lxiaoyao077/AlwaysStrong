@@ -176,11 +176,16 @@ fi
 [ -z "$PRODUCT" ] || [ -z "$DEVICE" ] && { log "device selection failed."; exit 1; }
 log "device: ${MODEL:-?} ($PRODUCT)"
 
-# ---- 3. Android Flash Tool client key, then the Canary build JSON ----
+# ---- 3. Android Flash Tool client key, then all builds ----
 fetch "$W/flash.html" "https://flash.android.com/" || { log "flash.android.com unreachable."; exit 1; }
-KEY=$($GREP -o '<meta property="flashstation:client_id" content="[^"]*"' "$W/flash.html" | cut -d'"' -f4)
-[ -z "$KEY" ] && { log "flashstation client key not found."; exit 1; }
-fetch "$W/canary.json" "https://content-flashstation-pa.googleapis.com/v1/config/$DEVICE?key=$KEY" "https://flash.android.com" || { log "canary JSON fetch failed."; exit 1; }
+KEY=$($GREP -o '<body data-client-config=.*' "$W/flash.html" | cut -d';' -f2 | cut -d'&' -f1)
+[ -z "$KEY" ] && { log "flash client key not found."; exit 1; }
+
+fetch "$W/station.json" \
+    "https://content-flashstation-pa.googleapis.com/v1/builds?product=$PRODUCT&key=$KEY" \
+    "https://flash.android.com" || { log "flashstation API unreachable."; exit 1; }
+
+reverse < "$W/station.json" | $GREP -m1 -A13 '"canary": true' > "$W/canary.json"
 ID=$($GREP 'releaseCandidateName' "$W/canary.json" | cut -d'"' -f4)
 INCREMENTAL=$($GREP 'buildId' "$W/canary.json" | cut -d'"' -f4)
 [ -z "$ID" ] || [ -z "$INCREMENTAL" ] && { log "canary build info missing from JSON."; exit 1; }
@@ -190,25 +195,58 @@ CANARY_ID=$($GREP '"id"' "$W/canary.json" | sed -e 's;.*canary-\(.*\)".*;\1;' -e
 SECURITY_PATCH=""
 if [ -n "$CANARY_ID" ]; then
     if fetch "$W/secbull.html" "https://source.android.com/docs/security/bulletin/pixel"; then
-        SECURITY_PATCH=$($GREP "$CANARY_ID" "$W/secbull.html" | sed 's;.*>\([0-9-]*\)<.*;\1;' | head -n1)
+        SECURITY_PATCH=$($GREP "<td>$CANARY_ID" "$W/secbull.html" | sed 's;.*<td>\(.*\)</td>;\1;' | head -n1)
     fi
     # autopif4's own fallback: assume the -05 patch for the canary month.
     [ -z "$SECURITY_PATCH" ] && SECURITY_PATCH="${CANARY_ID}-05"
 fi
 [ -z "$SECURITY_PATCH" ] && SECURITY_PATCH="$(date '+%Y-%m')-05"
 
-# ---- 5. emit the pif.prop ----
+# ---- 5. emit pif.prop, then migrate -> custom.pif.prop (the file PIF reads) ----
+# PIF's zygisk reads custom.pif.prop from the module dir, NOT pif.prop. Writing
+# only pif.prop leaves PIF spoofing a stale/default fingerprint and STRONG fails.
+# So we run the bundled migrate.sh exactly like autopif4 does. action.sh Step 4
+# then enforces the STRONG spoof settings (spoofProvider=0, spoofVendingFinger=1…).
 FP="google/$PRODUCT/$DEVICE:CANARY/$ID/$INCREMENTAL:user/release-keys"
 TMP="$W/pif.prop"
 cat > "$TMP" <<EOF
 MANUFACTURER=Google
 MODEL=$MODEL
+FINGERPRINT=$FP
 PRODUCT=$PRODUCT
 DEVICE=$DEVICE
-FINGERPRINT=$FP
 SECURITY_PATCH=$SECURITY_PATCH
 DEVICE_INITIAL_SDK_INT=32
 EOF
-cp -f "$TMP" "$TARGET" || { log "cannot write $TARGET."; exit 1; }
-log "wrote $TARGET ($FP)"
+
+grep -q 'FINGERPRINT=google/.*/.*:CANARY/' "$TMP" || { log "produced pif.prop looks wrong."; exit 1; }
+
+mkdir -p "$CONFIG_DIR"
+cp -f "$TMP" "$TARGET" 2>/dev/null   # keep pif.prop for display + sync_patch
+
+if [ ! -f "$SELF_DIR/migrate.sh" ]; then
+    log "migrate.sh missing — PIF can't read pif.prop, aborting."; exit 1
+fi
+cp -f "$TMP" "$SELF_DIR/pif.prop" 2>/dev/null
+rm -f "$SELF_DIR/custom.pif.prop" "$SELF_DIR/custom.pif.json" 2>/dev/null
+sh "$SELF_DIR/migrate.sh" -i -a "$SELF_DIR/pif.prop" >/dev/null 2>&1
+if [ ! -s "$SELF_DIR/custom.pif.prop" ]; then
+    log "migrate.sh did not produce custom.pif.prop."; exit 1
+fi
+
+# migrate.sh defaults to spoofProvider=1 / spoofVendingFinger=0, which asks for
+# a WEAK attestation and breaks STRONG. Enforce the STRONG settings here so the
+# native path is correct no matter who calls it (boot, hourly, Action) — the
+# hourly loop has no separate enforce step, so self-enforcing is essential.
+for kv in spoofProvider=0 spoofVendingFinger=1 spoofBuild=1 \
+          spoofProps=1 spoofSignature=0 spoofVendingSdk=0; do
+    k="${kv%=*}"; v="${kv#*=}"
+    if grep -qE "^${k}=" "$SELF_DIR/custom.pif.prop"; then
+        sed -i "s|^${k}=.*|${k}=${v}|" "$SELF_DIR/custom.pif.prop"
+    else
+        echo "${k}=${v}" >> "$SELF_DIR/custom.pif.prop"
+    fi
+done
+
+log "installed custom.pif.prop ($FP)"
 exit 0
