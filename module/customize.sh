@@ -30,7 +30,7 @@ ui_print ""
 for proc in TEESimulator supervisor daemon ta-enhanced; do
   for pid in $(pidof "$proc" 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 done
-pkill -9 -f TEESimulator 2>/dev/null || true
+for pid in $(pidof TEESimulator 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 
 # --- Zygisk implementation detection (Specter-style) ----------------------
 ZYGISK_IMPL="none"
