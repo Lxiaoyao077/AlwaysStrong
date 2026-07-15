@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# AlwaysStrong action button.
+# TieJia action button.
 # Shows each step progressively with status feedback.
 
 case "$0" in
@@ -16,7 +16,7 @@ unset ASH_STANDALONE
 [ -f "$MODPATH/common_func.sh" ] && . "$MODPATH/common_func.sh"
 find_sed
 
-CONFIG_DIR=/data/adb/tricky_store
+CONFIG_DIR="${TIEJIA_CONFIG_DIR:-/data/adb/tricky_store}"
 LINE="========================="
 VER=$(grep -m1 '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2-)
 
@@ -36,41 +36,96 @@ for bb in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/bu
     [ -x "$bb" ] && BB="$bb" && break
 done
 
+# Proxy support: honor http_proxy / ALL_PROXY env vars (set by user or VPN apps).
+# In GFW environments this is essential for GitHub downloads.
+_pxy_env() {
+    local _e=""
+    [ -n "$http_proxy" ] && _e="http_proxy=$http_proxy $_e"
+    [ -n "$ALL_PROXY" ] && _e="ALL_PROXY=$ALL_PROXY $_e"
+    echo "$_e"
+}
+
 # asfetch first (connects IPv4-first, works on IPv6-only-DNS networks); fall
 # through to busybox wget / curl if it ever fails on a host.
 dl_out() {
-    if [ -n "$ASFETCH" ]; then $ASFETCH -T 20 "$1" 2>/dev/null && return 0; fi
-    if [ -n "$BB" ]; then $BB wget -q -T 20 -O - "$1" 2>/dev/null && return 0; fi
-    if command -v curl >/dev/null 2>&1; then curl -fsSL --max-time 20 "$1" 2>/dev/null && return 0; fi
-    if command -v wget >/dev/null 2>&1; then wget -q -T 20 -O - "$1" 2>/dev/null && return 0; fi
+    if [ -n "$ASFETCH" ]; then eval "$(_pxy_env)" $ASFETCH -T 20 "$1" 2>/dev/null && return 0; fi
+    if [ -n "$BB" ]; then eval "$(_pxy_env)" $BB wget -q -T 20 -O - "$1" 2>/dev/null && return 0; fi
+    if command -v curl >/dev/null 2>&1; then eval "$(_pxy_env)" curl -fsSL --max-time 20 "$1" 2>/dev/null && return 0; fi
+    if command -v wget >/dev/null 2>&1; then eval "$(_pxy_env)" wget -q -T 20 -O - "$1" 2>/dev/null && return 0; fi
     return 1
 }
 dl_to() {
-    if [ -n "$ASFETCH" ]; then rm -f "$1"; $ASFETCH -T 60 -o "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
-    if [ -n "$BB" ]; then rm -f "$1"; $BB wget -q -T 60 -O "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
-    if command -v curl >/dev/null 2>&1; then rm -f "$1"; curl -fsSL --max-time 60 -o "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
-    if command -v wget >/dev/null 2>&1; then rm -f "$1"; wget -q -T 60 -O "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
+    if [ -n "$ASFETCH" ]; then rm -f "$1"; eval "$(_pxy_env)" $ASFETCH -T 60 -o "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
+    if [ -n "$BB" ]; then rm -f "$1"; eval "$(_pxy_env)" $BB wget -q -T 60 -O "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
+    if command -v curl >/dev/null 2>&1; then rm -f "$1"; eval "$(_pxy_env)" curl -fsSL --max-time 60 -o "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
+    if command -v wget >/dev/null 2>&1; then rm -f "$1"; eval "$(_pxy_env)" wget -q -T 60 -O "$1" "$2" 2>/dev/null; [ -s "$1" ] && return 0; fi
     return 1
 }
 
 # --- Header ---
 echo ""
 echo "  $LINE"
-row "🛡️" "AlwaysStrong  ${VER}"
+row "🛡️" "TieJia  ${VER}"
 echo "  $LINE"
 echo ""
 row "⏳" "初始化中..."
 sleep 3
 
 # --- Step 1: Target list ---
-# build_target_txt reads persisted mode from CONFIG_DIR/target_mode,
-# applies suffix accordingly (auto/force/certchain).
+# Interactive menu: Vol+/Vol- to choose mode, Power to confirm.
+# Three modes: auto (default, GMS only with !), certchain (?), force (!)
 if [ -x "$MODPATH/build_target_txt.sh" ]; then
     TGT_MODE=$(tr -d '\r' < "$CONFIG_DIR/target_mode" 2>/dev/null)
     case "$TGT_MODE" in
         auto|force|certchain) ;;
         *) TGT_MODE="auto" ;;
     esac
+
+    # Map current mode to menu index
+    case "$TGT_MODE" in
+        auto)      _idx=0 ;;
+        certchain) _idx=1 ;;
+        force)     _idx=2 ;;
+    esac
+
+    echo ""
+    echo "    音量 +/- 切换  |  电源键确认  |  8s 超时使用当前"
+    echo "    ─────────────────────────────────"
+
+    _render_menu() {
+        printf "\033[3A\r" 2>/dev/null
+        [ 0 -eq $_idx ] && echo "    ▶ 自动      默认, 仅 GMS 加 !" || echo "      自动      默认, 仅 GMS 加 !"
+        [ 1 -eq $_idx ] && echo "    ▶ 生成证书链  全部 app 加 ?"     || echo "      生成证书链  全部 app 加 ?"
+        [ 2 -eq $_idx ] && echo "    ▶ 修改证书链  全部 app 加 !"     || echo "      修改证书链  全部 app 加 !"
+    }
+
+    _render_menu
+
+    _wait=0; _done=0
+    while [ $_wait -lt 80 ]; do
+        _evt=$(getevent -lc 1 2>/dev/null)
+        if echo "$_evt" | grep -q "KEY_VOLUMEUP"; then
+            _idx=$(( (_idx + 1) % 3 ))
+            _render_menu
+        elif echo "$_evt" | grep -q "KEY_VOLUMEDOWN"; then
+            _idx=$(( (_idx - 1 + 3) % 3 ))
+            _render_menu
+        elif echo "$_evt" | grep -q "KEY_POWER"; then
+            _done=1; break
+        fi
+        sleep 0.1; _wait=$((_wait + 1))
+    done
+    echo ""
+
+    # Resolve selection
+    case $_idx in
+        0) TGT_MODE="auto" ;;
+        1) TGT_MODE="certchain" ;;
+        2) TGT_MODE="force" ;;
+    esac
+    # Persist for build_target_txt and next run
+    echo "$TGT_MODE" > "$CONFIG_DIR/target_mode" 2>/dev/null
+    row "🎯" "已选择: $TGT_MODE"
     sh "$MODPATH/build_target_txt.sh" --mode "$TGT_MODE" "$CONFIG_DIR/target.txt" >/dev/null 2>&1
 fi
 TGT_N=$(grep -cvE '^[[:space:]]*$' "$CONFIG_DIR/target.txt" 2>/dev/null)
@@ -93,6 +148,7 @@ elif [ -x "$MODPATH/keybox_fetch.sh" ]; then
     echo "    音量+ → Yurikey"
     echo "    音量- → KOWX712"
     echo "    8s 无操作 → 自动"
+    printf "    等待按键..."
     echo ""
 
     KB_SRC="auto"
@@ -105,7 +161,10 @@ elif [ -x "$MODPATH/keybox_fetch.sh" ]; then
             KB_SRC="upstream"; break
         fi
         sleep 0.1; _wait=$((_wait + 1))
+        # visual feedback: dot every 1s (10 ticks)
+        [ $((_wait % 10)) -eq 0 ] && printf "." 2>/dev/null
     done
+    echo ""
 
     row "⌛" "下载密钥中 (${KB_SRC})..."
     sh "$MODPATH/keybox_fetch.sh" "$KB_SRC" >/dev/null 2>&1
@@ -219,7 +278,7 @@ sleep 1
 # --- Restart PI + status ---
 killall -9 com.google.android.gms.unstable 2>/dev/null
 killall -9 com.android.vending 2>/dev/null
-am force-stop com.android.vending >/dev/null 2>&1
+am force-stop com.android.vending >/dev/null 2>&1 &
 
 if [ -x "$MODPATH/status_fetch.sh" ]; then
     MODPATH="$MODPATH" sh "$MODPATH/status_fetch.sh" manual >/dev/null 2>&1
@@ -242,9 +301,11 @@ if [ -d /data/adb/magisk ] && [ "$KSU" != "true" ] && [ "$APATCH" != "true" ]; t
             URL=$(dl_out "$API" 2>/dev/null | grep -o 'https://[^"]*\.apk' | head -1)
             [ -z "$URL" ] && URL="$FB"
             if dl_to "$T" "$URL" && [ -s "$T" ]; then
-                chmod 644 "$T" 2>/dev/null
-                pm install -r "$T" >/dev/null 2>&1
-            fi
+                # basic APK integrity: must start with PK zip magic and be > 10KB
+                if head -c2 "$T" 2>/dev/null | grep -q 'PK' && [ "$(wc -c < "$T")" -gt 10240 ]; then
+                    chmod 644 "$T" 2>/dev/null
+                    pm install -r "$T" >/dev/null 2>&1
+                fi
             rm -f "$T" "$MODPATH/.webui_busy" 2>/dev/null
         } &
     fi
