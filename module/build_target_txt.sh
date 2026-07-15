@@ -33,6 +33,13 @@ for arg in "$@"; do
         --mode) next_is_mode=1; has_explicit_mode=1 ;;
     esac
 done
+# Validate explicit --mode value
+if [ "$has_explicit_mode" -eq 1 ]; then
+    case "$MODE" in
+        auto|force|certchain) ;;
+        *) echo "build_target_txt: invalid --mode '$MODE' (expected auto|force|certchain)" >&2; exit 1 ;;
+    esac
+fi
 # Strip CR from persisted config (handles Windows-line-ending edits via adb)
 if [ "$has_explicit_mode" -eq 0 ] && [ -f "$CFG_MODE" ]; then
     MODE=$(tr -d '\r' < "$CFG_MODE" 2>/dev/null)
