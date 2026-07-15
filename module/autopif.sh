@@ -39,19 +39,23 @@ get_model_product_list() {
 	printf "{\"model\":["
 	count=0
 	total=$(echo "$MODEL_LIST" | wc -l)
-	echo "$MODEL_LIST" | while read -r model; do
+	while IFS= read -r model; do
 		count=$((count + 1))
-		printf "\"%s\"" "$model"
+		printf '\"%s\"' "$model"
 		[ $count -lt $total ] && printf ","
-	done
+	done <<MODEL_EOF
+$MODEL_LIST
+MODEL_EOF
 	printf "],\"product\":["
 	count=0
 	total=$(echo "$PRODUCT_LIST" | wc -l)
-	echo "$PRODUCT_LIST" | while read -r product; do
+	while IFS= read -r product; do
 		count=$((count + 1))
-		printf "\"%s\"" "$product"
+		printf '\"%s\"' "$product"
 		[ $count -lt $total ] && printf ","
-	done
+	done <<PRODUCT_EOF
+$PRODUCT_LIST
+PRODUCT_EOF
 	printf "]}"
 
 	rm -rf "$TEMPDIR"
