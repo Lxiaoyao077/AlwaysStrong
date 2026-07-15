@@ -194,8 +194,8 @@ row "📱" "${MD:-unknown}"
 sleep 1
 
 # --- Restart PI + status ---
-killall -9 com.google.android.gms.unstable 2>/dev/null
-killall -9 com.android.vending 2>/dev/null
+for pid in $(pidof com.google.android.gms.unstable 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
+for pid in $(pidof com.android.vending 2>/dev/null); do kill -9 "$pid" 2>/dev/null; done
 am force-stop com.android.vending >/dev/null 2>&1
 
 if [ -x "$MODPATH/status_fetch.sh" ]; then
