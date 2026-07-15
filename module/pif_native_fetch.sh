@@ -17,6 +17,9 @@
 #   1  crawl/parse failed (nothing written)
 
 # ---- Parse flags (compatible with autopif.sh / autopif4.sh callers) ----
+DEBUG=0
+STEP=0
+step() { STEP=$((STEP+1)); [ "$DEBUG" = 1 ] && log "[step $STEP/6] $*"; }
 # All three flags are effectively no-ops: this script already outputs STRONG-
 # friendly props and already does device matching. Kept for caller compatibility.
 FORCE_STRONG=1 FORCE_MATCH=1
@@ -26,6 +29,7 @@ while [ $# -gt 0 ]; do
         -m|--match)    shift ;;   # device matching (already default)
         -a|--advanced) shift ;;   # advanced props (already default)
         -l|--list)     LIST_ONLY=1; shift ;;
+        -d|--debug)    DEBUG=1; shift ;;
         -h|--help)     echo "pif_native_fetch.sh [-s] [-m] [-a] [-l]"; exit 0 ;;
         *) break ;;
     esac
@@ -112,16 +116,19 @@ reverse() { # portable `tac`
 
 W="$CONFIG_DIR/.pif_native.$$"
 mkdir -p "$W" || { log "cannot create work dir."; exit 1; }
-trap 'rm -rf "$W"' EXIT INT TERM
+[ "$DEBUG" = 1 ] && log "work dir: $W"
+trap '[ "$DEBUG" = 1 ] || rm -rf "$W"' EXIT INT TERM
 
 # ---- 1. latest Pixel Beta device list (Android Developers) ----
+step "fetching developer.android.com versions page"
 fetch "$W/versions.html" "https://developer.android.com/about/versions" || {
-    log "developer.android.com unreachable."; exit 1; }
+    log "[STEP 1 FAIL] developer.android.com unreachable"; exit 1; }
 LATEST_URL=$($GREP -o 'https://developer.android.com/about/versions/.*[0-9]"' "$W/versions.html" \
     | sort -ru | cut -d'"' -f1 | head -n1)
-[ -z "$LATEST_URL" ] && { log "no latest version page found."; exit 1; }
-fetch "$W/latest.html" "$LATEST_URL" || { log "version page fetch failed."; exit 1; }
+[ -z "$LATEST_URL" ] && { log "[STEP 1 FAIL] no version link found on developer.android.com — page format changed?"; exit 1; }
+fetch "$W/latest.html" "$LATEST_URL" || { log "[STEP 2 FAIL] version detail page unreachable"; exit 1; }
 
+step "parsing device table from version page"
 FI_HREF=$($GREP -o 'href=".*download.*"' "$W/latest.html" | $GREP 'qpr' | cut -d'"' -f2 | head -n1)
 OTA_HREF=$($GREP -o 'href=".*download-ota.*"' "$W/latest.html" | $GREP 'qpr' | cut -d'"' -f2 | head -n1)
 [ -n "$FI_HREF" ]  && fetch "$W/fi.html"  "https://developer.android.com$FI_HREF"
@@ -135,11 +142,11 @@ if [ -s "$W/fi.html" ] && [ -s "$W/ota.html" ]; then
     nota=$($GREP -c 'tr id=' "$W/ota.html" 2>/dev/null)
     [ "${nota:-0}" -gt "${nfi:-0}" ] && SRC=ota
 fi
-[ -s "$W/$SRC.html" ] || { log "no device table."; exit 1; }
+[ -s "$W/$SRC.html" ] || { log "[STEP 2 FAIL] no device table fetched (SRC=$SRC)"; exit 1; }
 
 MODEL_LIST=$($GREP -A1 'tr id=' "$W/$SRC.html" | $GREP 'td' | sed 's;.*<td>\(.*\)</td>.*;\1;')
 PRODUCT_LIST=$($GREP 'tr id=' "$W/$SRC.html" | sed 's;.*<tr id="\(.*\)".*;\1_beta;')
-[ -z "$PRODUCT_LIST" ] && { log "device list parse failed."; exit 1; }
+[ -z "$PRODUCT_LIST" ] && { log "[STEP 2 FAIL] device table parse failed — HTML format changed?"; exit 1; }
 
 # --list mode: output JSON device catalogue and exit immediately
 if [ "${LIST_ONLY:-0}" = 1 ]; then
@@ -190,20 +197,22 @@ fi
 log "device: ${MODEL:-?} ($PRODUCT)"
 
 # ---- 3. Android Flash Tool client key, then all builds ----
-fetch "$W/flash.html" "https://flash.android.com/" || { log "flash.android.com unreachable."; exit 1; }
+step "extracting flashstation API key from flash.android.com"
+fetch "$W/flash.html" "https://flash.android.com/" || { log "[STEP 3 FAIL] flash.android.com unreachable"; exit 1; }
 KEY=$($GREP -o '<body data-client-config=.*' "$W/flash.html" | cut -d';' -f2 | cut -d'&' -f1)
-[ -z "$KEY" ] && { log "flash client key not found."; exit 1; }
+[ -z "$KEY" ] && { log "[STEP 3 FAIL] flashstation API key not found in flash.html — page format changed?"; exit 1; }
 
 fetch "$W/station.json" \
     "https://content-flashstation-pa.googleapis.com/v1/builds?product=$PRODUCT&key=$KEY" \
-    "https://flash.android.com" || { log "flashstation API unreachable."; exit 1; }
+    "https://flash.android.com" || { log "[STEP 3 FAIL] flashstation API unreachable (product=$PRODUCT)"; exit 1; }
 
 reverse < "$W/station.json" | $GREP -m1 -A13 '"canary": true' > "$W/canary.json"
 ID=$($GREP 'releaseCandidateName' "$W/canary.json" | cut -d'"' -f4)
 INCREMENTAL=$($GREP 'buildId' "$W/canary.json" | cut -d'"' -f4)
-[ -z "$ID" ] || [ -z "$INCREMENTAL" ] && { log "canary build info missing from JSON."; exit 1; }
+[ -z "$ID" ] || [ -z "$INCREMENTAL" ] && { log "[STEP 4 FAIL] canary build not in station.json — no canary available for $PRODUCT?"; exit 1; }
 
 # ---- 4. security patch level from the Pixel Update Bulletins ----
+step "extracting canary build from station.json"
 CANARY_ID=$($GREP '"id"' "$W/canary.json" | sed -e 's;.*canary-\(.*\)".*;\1;' -e 's;^\(.\{4\}\);\1-;')
 SECURITY_PATCH=""
 if [ -n "$CANARY_ID" ]; then
@@ -232,19 +241,19 @@ SECURITY_PATCH=$SECURITY_PATCH
 DEVICE_INITIAL_SDK_INT=32
 EOF
 
-grep -q 'FINGERPRINT=google/.*/.*:CANARY/' "$TMP" || { log "produced pif.prop looks wrong."; exit 1; }
+grep -q 'FINGERPRINT=google/.*/.*:CANARY/' "$TMP" || { log "[STEP 5 FAIL] generated pif.prop looks invalid"; }
 
 mkdir -p "$CONFIG_DIR"
 cp -f "$TMP" "$TARGET" 2>/dev/null   # keep pif.prop for display + sync_patch
 
 if [ ! -f "$SELF_DIR/migrate.sh" ]; then
-    log "migrate.sh missing — PIF can't read pif.prop, aborting."; exit 1
+    log "[STEP 5 FAIL] migrate.sh missing from module dir"; exit 1
 fi
 cp -f "$TMP" "$SELF_DIR/pif.prop" 2>/dev/null
 rm -f "$SELF_DIR/custom.pif.prop" "$SELF_DIR/custom.pif.json" 2>/dev/null
 sh "$SELF_DIR/migrate.sh" -i -a "$SELF_DIR/pif.prop" >/dev/null 2>&1
 if [ ! -s "$SELF_DIR/custom.pif.prop" ]; then
-    log "migrate.sh did not produce custom.pif.prop."; exit 1
+    log "[STEP 5 FAIL] migrate.sh ran but produced no custom.pif.prop"
 fi
 
 # migrate.sh defaults to spoofProvider=1 / spoofVendingFinger=0, which asks for
@@ -262,5 +271,5 @@ for kv in spoofProvider=0 spoofVendingFinger=1 spoofBuild=1 \
     fi
 done
 
-log "installed custom.pif.prop ($FP)"
+log "[FINISHED] installed custom.pif.prop ($FP)"
 exit 0
