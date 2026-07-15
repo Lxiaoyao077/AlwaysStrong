@@ -164,16 +164,7 @@ sleep 1
 # --- Step 4: Spoof settings + security patch ---
 for f in "$MODPATH/custom.pif.prop" "$MODPATH/pif.prop" \
          "$CONFIG_DIR/custom.pif.prop" "$CONFIG_DIR/pif.prop"; do
-    [ -f "$f" ] || continue
-    for kv in spoofProvider=0 spoofVendingFinger=1 spoofBuild=1 \
-              spoofProps=1 spoofSignature=0 spoofVendingSdk=0; do
-        k="${kv%=*}"; v="${kv#*=}"
-        if grep -qE "^${k}=" "$f"; then
-            $SED "s|^${k}=.*|${k}=${v}|" "$f"
-        else
-            echo "${k}=${v}" >> "$f"
-        fi
-    done
+    enforce_spoof "$f"
 done
 
 PATCH=""
