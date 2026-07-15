@@ -60,7 +60,7 @@ set_persist persist.sys.pp.finsky                                 false
 getprop 2>/dev/null | grep -E '(pihook|pixelprops)' | sed 's/^\[\(.*\)\]:.*/\1/' | \
 while IFS= read -r prop; do
     [ -z "$prop" ] && continue
-    resetprop -p --delete "$prop" 2>/dev/null || true
+    resetprop -n -p "$prop" "" 2>/dev/null || true
 done
 
 exit 0
