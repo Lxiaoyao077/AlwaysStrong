@@ -140,9 +140,9 @@ if [ "$FP_OK" = 0 ]; then
     #    Bounded so its stalling crawl can't freeze the Action.
     if [ -f "$MODPATH/autopif4.sh" ]; then
         if command -v timeout >/dev/null 2>&1; then
-            timeout 40 sh "$MODPATH/autopif4.sh" -s -m >>"$CONFIG_DIR/autopif_native.log" 2>&1 && FP_OK=1
+            timeout 40 sh "$MODPATH/autopif4.sh" -s -m >>"$CONFIG_DIR/autopif_fallback.log" 2>&1 && FP_OK=1
         else
-            sh "$MODPATH/autopif4.sh" -s -m >>"$CONFIG_DIR/autopif_native.log" 2>&1 && FP_OK=1
+            sh "$MODPATH/autopif4.sh" -s -m >>"$CONFIG_DIR/autopif_fallback.log" 2>&1 && FP_OK=1
         fi
         [ "$FP_OK" = 1 ] && FP_SRC="pif"
     fi
