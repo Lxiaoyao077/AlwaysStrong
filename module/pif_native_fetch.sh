@@ -123,8 +123,8 @@ trap '[ "$DEBUG" = 1 ] || rm -rf "$W"' EXIT INT TERM
 step "fetching developer.android.google.cn versions page"
 fetch "$W/versions.html" "https://developer.android.google.cn/about/versions" || {
     log "[STEP 1 FAIL] developer.android.google.cn unreachable"; exit 1; }
-LATEST_URL=$($GREP -o 'https://developer.android.google.cn/about/versions/.*[0-9]"' "$W/versions.html" \
-    | sort -ru | cut -d'"' -f1 | head -n1)
+LATEST_URL=$($GREP -oE '(https://developer\.android\.google\.cn)?/about/versions/[^"[:space:]]*[0-9][^"]*' "$W/versions.html" \
+    | head -n1 | sed 's|^/|https://developer.android.google.cn/|')
 [ -z "$LATEST_URL" ] && { log "[STEP 1 FAIL] no version link found on developer.android.google.cn — page format changed?"; exit 1; }
 fetch "$W/latest.html" "https://developer.android.google.cn$LATEST_URL" || { log "[STEP 2 FAIL] version detail page unreachable"; exit 1; }
 
