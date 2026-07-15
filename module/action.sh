@@ -12,6 +12,10 @@ cd "$MODPATH" 2>/dev/null
 set +o standalone 2>/dev/null
 unset ASH_STANDALONE
 
+# Source shared helpers (find_sed, log_save, find_tool, resetprop_*)
+[ -f "$MODPATH/common_func.sh" ] && . "$MODPATH/common_func.sh"
+find_sed
+
 CONFIG_DIR=/data/adb/tricky_store
 LINE="========================="
 VER=$(grep -m1 '^version=' "$MODPATH/module.prop" 2>/dev/null | cut -d= -f2-)
@@ -31,15 +35,6 @@ for bb in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/bu
           /data/adb/modules/busybox-ndk/system/*/busybox; do
     [ -x "$bb" ] && BB="$bb" && break
 done
-
-# Resolve sed with -i support — toybox sed (AOSP default) lacks -i,
-# so we fall back to busybox sed which always supports it.
-SED="sed -i"
-if [ -n "$BB" ]; then
-    SED="$BB sed -i"
-elif command -v busybox >/dev/null 2>&1; then
-    SED="busybox sed -i"
-fi
 
 # asfetch first (connects IPv4-first, works on IPv6-only-DNS networks); fall
 # through to busybox wget / curl if it ever fails on a host.
