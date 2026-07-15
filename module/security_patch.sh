@@ -6,6 +6,11 @@ MODDIR=$(cd "${0%/*}" 2>/dev/null && pwd)
 [ -z "$MODDIR" ] && MODDIR="/data/adb/modules/tricky_store"
 AUTO_FLAG="/data/adb/tricky_store/pif_auto_security_patch"
 
+# source shared helpers (provides find_sed)
+MODDIR=$(cd "${0%/*}" 2>/dev/null && pwd)
+[ -f "$MODDIR/common_func.sh" ] && . "$MODDIR/common_func.sh"
+find_sed
+
 case "$1" in
     --enable) touch "$AUTO_FLAG";;
     --disable) rm -f "$AUTO_FLAG" "/data/adb/tricky_store/system.prop"; exit;;
@@ -53,13 +58,13 @@ if [ "$FILE_NAME" = "security_patch.txt" ]; then
     } > "$TARGET_FILE"
 elif [ "$FILE_NAME" = "devconfig.toml" ]; then
     if grep -q "^securityPatch" "$TARGET_FILE"; then
-        sed -i "s/^securityPatch .*/securityPatch = \"$SECURITY_PATCH\"/" "$TARGET_FILE"
+        $SED "s|^securityPatch .*|securityPatch = \"$SECURITY_PATCH\"|" "$TARGET_FILE"
     else
         # This is no longer needed for newer version of qwq233 fork but keep it for compatibility
         if ! grep -q "^\\[deviceProps\\]" "$TARGET_FILE"; then
             echo "securityPatch = \"$SECURITY_PATCH\"" >> "$TARGET_FILE"
         else
-            sed -i "s/^\[deviceProps\]/securityPatch = \"$SECURITY_PATCH\"\n&/" "$TARGET_FILE"
+            $SED "s|^\[deviceProps\]|securityPatch = \"$SECURITY_PATCH\"\n&|" "$TARGET_FILE"
         fi
     fi
 fi
