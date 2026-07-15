@@ -38,13 +38,14 @@ sleep 1
 #    Everything under MODDIR except: keybox, config, .bootstrapped, .conflict_state
 SKIP_PATTERNS="keybox.xml|target.txt|hbk|.bootstrapped|.conflict_state|custom_keybox|tee_status"
 
-if [ -d "${MODDIR}" ]; then
+SRCDIR="${MODPATH:-${MODDIR}}"
+if [ -d "${SRCDIR}" ] && [ "${SRCDIR}" != "${MODDIR}" ]; then
   log "copying updated module files..."
-  for f in "${MODDIR}"/*.sh "${MODDIR}"/*.prop "${MODDIR}"/daemon \
-           "${MODDIR}"/supervisor "${MODDIR}"/inject "${MODDIR}"/sepolicy.rule \
-           "${MODDIR}"/webroot "${MODDIR}"/bin "${MODDIR}"/zygisk \
-           "${MODDIR}"/classes.dex "${MODDIR}"/tee_classes.dex \
-           "${MODDIR}"/lib*; do
+  for f in "${SRCDIR}"/*.sh "${SRCDIR}"/*.prop "${SRCDIR}"/daemon \
+           "${SRCDIR}"/supervisor "${SRCDIR}"/inject "${SRCDIR}"/sepolicy.rule \
+           "${SRCDIR}"/webroot "${SRCDIR}"/bin "${SRCDIR}"/zygisk \
+           "${SRCDIR}"/classes.dex "${SRCDIR}"/tee_classes.dex \
+           "${SRCDIR}"/lib*; do
     [ ! -e "$f" ] && continue
     # use simple name check — config files live under CFG=/data/adb/tricky_store
     # not under MODDIR, so MODDIR copies are safe (they're just fresh scripts/bins)
