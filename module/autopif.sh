@@ -16,7 +16,7 @@ TEMPDIR="$MODDIR/temp" #fallback
 [ -w /dev ] && TEMPDIR="/dev/playintegrityfix"
 mkdir -p "$TEMPDIR"
 cd "$TEMPDIR"
-trap 'rm -rf "$TEMPDIR"' EXIT INT TERM
+trap 'rm -rf "$TEMPDIR"/* "$TEMPDIR"/.* 2>/dev/null' EXIT INT TERM
 
 echo "[+] PlayIntegrityFix $version"
 echo "[+] $(basename "$0")"
@@ -29,7 +29,7 @@ set_random_beta() {
 		PRODUCT="oriole_beta"
 	else
 		count=$(echo "$MODEL_LIST" | wc -l)
-		rand_index=$(( $$ % count ))
+		rand_index=$( (dd if=/dev/urandom bs=2 count=1 2>/dev/null | od -An -tu2 || echo $$) | awk "{print \$1 % $count}" )
 		MODEL=$(echo "$MODEL_LIST" | sed -n "$((rand_index + 1))p")
 		PRODUCT=$(echo "$PRODUCT_LIST" | sed -n "$((rand_index + 1))p")
 	fi
