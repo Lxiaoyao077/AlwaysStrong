@@ -32,27 +32,12 @@ if [ -z "$BASE_URL" ]; then
     exit 1
 fi
 
-# ---- Resolve tools ----
-# No single downloader works on every device: busybox wget's built-in TLS
-# stalls mid-stream on the keybox mirror CDN on some devices, while our bundled
-# rustls fetcher (asfetch) fails to connect on others. So we try each available
-# engine in turn (asfetch → busybox wget → curl → system wget) and keep the
-# first that actually returns bytes — never trust one tool to always work.
+# ---- Resolve tools (via common_func.sh) ----
 SELF_DIR=$(cd "${0%/*}" 2>/dev/null && pwd)
 [ -z "$SELF_DIR" ] && SELF_DIR=/data/adb/modules/tricky_store
-case "$(uname -m)" in
-    aarch64)        ABI=arm64-v8a ;;
-    armv7*|armv8l)  ABI=armeabi-v7a ;;
-    x86_64)         ABI=x86_64 ;;
-    i?86)           ABI=x86 ;;
-    *)              ABI="" ;;
-esac
-ASFETCH="$SELF_DIR/bin/$ABI/asfetch"
-BB=""
-for bb in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox \
-          /data/adb/modules/busybox-ndk/system/*/busybox; do
-    [ -x "$bb" ] && BB="$bb" && break
-done
+[ -f "$SELF_DIR/common_func.sh" ] && . "$SELF_DIR/common_func.sh"
+resolve_asfetch "$SELF_DIR"
+resolve_bb
 
 # run_engine NAME OUTFILE URL — one download attempt with the named engine.
 run_engine() {
