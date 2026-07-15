@@ -34,7 +34,7 @@ rm -rf /data/adb/modules/playintegrityfix 2>/dev/null
 # Only clear a prop if it STILL holds the exact "disabled" value we wrote — that
 # way we never clobber a value the ROM set for itself. Takes effect next boot.
 revert_spoof() {
-    [ "$(resetprop "$1" 2>/dev/null)" = "$2" ] && resetprop -p --delete "$1" 2>/dev/null
+    [ "$(resetprop "$1" 2>/dev/null)" = "$2" ] && resetprop -n -p "$1" "" 2>/dev/null
 }
 revert_spoof persist.sys.pihooks.disable.gms_props                 true
 revert_spoof persist.sys.pihooks.disable.gms_key_attestation_block true
