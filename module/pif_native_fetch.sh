@@ -261,16 +261,7 @@ fi
 # a WEAK attestation and breaks STRONG. Enforce the STRONG settings here so the
 # native path is correct no matter who calls it (boot, hourly, Action) — the
 # hourly loop has no separate enforce step, so self-enforcing is essential.
-find_sed  # portable sed -i (toybox sed lacks -i)
-for kv in spoofProvider=0 spoofVendingFinger=1 spoofBuild=1 \
-          spoofProps=1 spoofSignature=0 spoofVendingSdk=0; do
-    k="${kv%=*}"; v="${kv#*=}"
-    if grep -qE "^${k}=" "$SELF_DIR/custom.pif.prop"; then
-        $SED "s|^${k}=.*|${k}=${v}|" "$SELF_DIR/custom.pif.prop"
-    else
-        echo "${k}=${v}" >> "$SELF_DIR/custom.pif.prop"
-    fi
-done
+enforce_spoof "$SELF_DIR/custom.pif.prop"
 
 log "[FINISHED] installed custom.pif.prop ($FP)"
 exit 0
