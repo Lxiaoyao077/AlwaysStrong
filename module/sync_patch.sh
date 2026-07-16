@@ -77,6 +77,13 @@ for pf in "$CONFIG_DIR/custom.pif.prop"; do
     [ -f "$pf" ] || continue
     if grep -qE '^[#]?\*\.security_patch=' "$pf"; then
         $SED "s|^[#]\?\*\.security_patch=.*|*.security_patch=$DOT|" "$pf"
+        # Fallback: if SED is a no-op (empty output or missing match after edit),
+        # replace the file inline with a filtered copy to ensure the patch date lands.
+        if ! grep -qE "^\*\.security_patch=${DOT}$" "$pf"; then
+            grep -vE '^[#]?\*\.security_patch=' "$pf" > "$pf.tmp"
+            printf '*.security_patch=%s\n' "$DOT" >> "$pf.tmp"
+            mv "$pf.tmp" "$pf"
+        fi
     else
         printf '*.security_patch=%s\n' "$DOT" >> "$pf"
     fi
