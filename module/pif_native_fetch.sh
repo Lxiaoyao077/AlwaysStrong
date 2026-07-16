@@ -157,7 +157,9 @@ esac
 if [ -z "$PRODUCT" ]; then
     N=$(echo "$PRODUCT_LIST" | grep -c .)
     [ "${N:-0}" -lt 1 ] && { log "empty device list."; exit 1; }
-    R="${RANDOM:-$$}"
+    # POSIX random: use /dev/urandom for entropy, fall back to $$
+    R=$(head -c 4 /dev/urandom 2>/dev/null | od -An -t u4 | tr -d ' \n')
+    [ -z "$R" ] && R="$$"
     IDX=$(( (R % N) + 1 ))
     MODEL=$(echo "$MODEL_LIST"   | sed -n "${IDX}p")
     PRODUCT=$(echo "$PRODUCT_LIST" | sed -n "${IDX}p")
@@ -201,4 +203,28 @@ DEVICE_INITIAL_SDK_INT=32
 EOF
 cp -f "$TMP" "$TARGET" || { log "cannot write $TARGET."; exit 1; }
 log "wrote $TARGET ($FP)"
+
+# 6. write device.conf
+DEVICE_CONF="$CONFIG_DIR/device.conf"
+cat > "$W/device.conf" <<DEOF
+MANUFACTURER=Google
+BRAND=google
+MODEL=$MODEL
+DEVICE=$DEVICE
+PRODUCT=$PRODUCT
+FINGERPRINT=$FP
+SECURITY_PATCH=$SECURITY_PATCH
+BUILD_TYPE=user
+BUILD_TAGS=release-keys
+BUILD_DESCRIPTION=${PRODUCT}-user ${ID} ${INCREMENTAL} release-keys
+AVB_VERSION=2.0
+VBMETA_SIZE=4096
+CRYPTO_STATE=encrypted
+VERIFIED_BOOT_STATE=green
+VERITY_MODE=enforcing
+FLASH_LOCKED=1
+DEOF
+cp -f "$W/device.conf" "$DEVICE_CONF" || { log "cannot write $DEVICE_CONF."; exit 1; }
+log "wrote $DEVICE_CONF"
+
 exit 0

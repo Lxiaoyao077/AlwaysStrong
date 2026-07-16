@@ -43,7 +43,8 @@ SECURITY_PATCH="$(grep "^SECURITY_PATCH=" "$PIFPROP" | cut -d= -f2)"
 SHORT_PATCH="$(echo "$SECURITY_PATCH" | awk -F- '{print $1 $2}')"
 
 # Some device might need `system=prop` to get integrity so we keep the previous behaviour
-if [ -s "$TARGET_FILE" ] && grep -q "^system=prop" "$TARGET_FILE"; then
+# Match exact value "prop" (not a date like 202407) to avoid false positives
+if [ -s "$TARGET_FILE" ] && grep -q '^system=prop$' "$TARGET_FILE"; then
     SYSTEM="prop"
 else
     SYSTEM="$SHORT_PATCH"

@@ -8,9 +8,6 @@
 #
 # Usage:
 #   sh build_target_txt.sh [--mode auto|force|certchain] [output_path]
-#
-# The aswatcher inotify daemon auto-adds newly installed packages at runtime;
-# this script produces the initial seed and the periodic Action-tap rebuild.
 
 SELF_DIR="$(cd "${0%/*}" 2>/dev/null && pwd)"
 . "$SELF_DIR/common_func.sh"
@@ -18,51 +15,50 @@ init_config
 
 TRICKY_DIR="$CONFIG_DIR"
 
-# POSIX-portable "last argument" extraction (${@: -1} is bash-only)
-for last; do :; done
-TGT="${last:-${TRICKY_DIR}/target.txt}"
-case "$TGT" in
-    --mode) TGT="${TRICKY_DIR}/target.txt" ;;
-    /*) ;;
-    *) TGT="${TRICKY_DIR}/target.txt" ;;
-esac
-
-# --- resolve mode: CLI arg > config file > default (auto)
+# Two-pass arg parse: extract --mode first, remainder is output_path.
 MODE="auto"
-CFG_MODE="${TRICKY_DIR}/target_mode"
-# Consume --mode <val> in one pass: peek at arg after --mode, set MODE, skip val
+TGT="${TRICKY_DIR}/target.txt"
 has_explicit_mode=0
-next_is_mode=0
-for arg in "$@"; do
-    [ "$next_is_mode" = 1 ] && { MODE="$arg"; next_is_mode=0; continue; }
-    case "$arg" in
-        --mode) next_is_mode=1; has_explicit_mode=1 ;;
-    esac
-done
-# Strip CR from persisted config (handles Windows-line-ending edits via adb)
-if [ "$has_explicit_mode" -eq 0 ] && [ -f "$CFG_MODE" ]; then
-    MODE=$(tr -d '\r' < "$CFG_MODE" 2>/dev/null)
-    case "$MODE" in
-        auto|force|certchain) ;;
-        *) MODE="auto" ;;
+parse_args() {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --mode)
+                has_explicit_mode=1
+                shift
+                if [ $# -gt 0 ]; then
+                    case "$1" in
+                        auto|force|certchain) MODE="$1"; shift ;;
+                        *) shift ;;
+                    esac
+                fi
+                ;;
+            *)
+                TGT="$1"
+                shift
+                ;;
+        esac
+    done
+}
+parse_args "$@"
+
+# Persisted config file overrides default (only if --mode not explicitly given)
+if [ "$has_explicit_mode" -eq 0 ] && [ -f "${TRICKY_DIR}/target_mode" ]; then
+    CFG_MODE=$(tr -d '\r' < "${TRICKY_DIR}/target_mode" 2>/dev/null)
+    case "$CFG_MODE" in
+        auto|force|certchain) MODE="$CFG_MODE" ;;
     esac
 fi
 
-# Resolve suffix from mode
 case "$MODE" in
     force)     SUFFIX="!" ;;
     certchain) SUFFIX="?" ;;
     *)         SUFFIX=""  ;;
 esac
 
-# Bail out early if pm is unreachable -- keep existing target.txt as-is.
 pm list packages >/dev/null 2>&1 || exit 1
 
 ALL=$(pm list packages 2>/dev/null | sed 's/^package://')
 
-# OEM payment / wallet / store apps that ship pre-installed (so `-3` misses
-# them) but legitimately call the Play Integrity API. Add only if actually
-# present on this device.
 OEM_LIST="
 com.samsung.android.spay
 com.samsung.android.samsungpay.gear
@@ -82,8 +78,6 @@ com.heytap.speechassist
 com.coloros.sceneservice
 "
 
-# GMS/GSF/Vending — in auto mode they always get `!` (hardware keybox needed
-# for STRONG); in force/certchain mode they get the same suffix as everything else.
 FORCED_LIST="
 com.android.vending
 com.google.android.gms
@@ -93,8 +87,6 @@ com.google.android.gsf
 is_installed() { printf '%s\n' "$ALL" | grep -Fxq "$1"; }
 
 {
-    # User installs (`-3`). Filter the forced names defensively in case a
-    # weird ROM ever surfaces them through `-3`.
     pm list packages -3 2>/dev/null \
         | sed 's/^package://' \
         | grep -Fxv -e com.android.vending \
@@ -116,9 +108,7 @@ is_installed() { printf '%s\n' "$ALL" | grep -Fxq "$1"; }
     done
 } | while read -r pkg; do
     [ -z "$pkg" ] && continue
-    # Guard: valid Android package names must contain at least one dot
     case "$pkg" in *.*) ;; *) continue ;; esac
-    # In force/certchain mode, append suffix to every non-forced package
     case "$pkg" in
         *[?!]) printf '%s\n' "$pkg" ;;
         *)
@@ -131,6 +121,5 @@ is_installed() { printf '%s\n' "$ALL" | grep -Fxq "$1"; }
     esac
 done | sort -u > "${TGT}.tmp" && mv -f "${TGT}.tmp" "$TGT"
 
-# Persist mode choice so WebUI reads it back
 mkdir -p "$TRICKY_DIR" 2>/dev/null
-printf '%s\n' "$MODE" > "$CFG_MODE" 2>/dev/null
+printf '%s\n' "$MODE" > "${TRICKY_DIR}/target_mode" 2>/dev/null

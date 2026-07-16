@@ -11,6 +11,17 @@ AIGC:
 
 # TieJia Changelog
 
+## v2.2.1 (2026-07-16)
+
+- customize.sh: 移除执行冲突模块 uninstall.sh 的安全风险
+- action.sh: 移除工具函数区死代码
+- security_patch.sh: grep 精确匹配，避免子串误命中
+- pif_native_fetch.sh: $RANDOM bashism 改为 /dev/urandom
+- common_func.sh: 日志函数 mkdir 原子锁，避免竞态条件
+- service.sh: 函数化重构，提取 6 个命名函数
+- keybox_fetch.sh: 复用 detect_abi/find_busybox/find_tool 消除重复定义
+- build_target_txt.sh: 参数解析重写
+
 ## v1.4.10 (2026-07-16) — 10-bug 安全健壮性热修复
 - P0: autopif4.sh find_busybox() 无限递归栈溢出修复
 - P1: sync_patch.sh sed -i 回退、target_cleanup.sh 黑名单正则转义、pif_native_fetch.sh fetch() 最小 16 字节校验、logcat_cleanup.sh SED 未定义兜底

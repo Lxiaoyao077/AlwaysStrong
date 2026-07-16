@@ -145,8 +145,6 @@ if [ -x "$MODPATH/build_target_txt.sh" ]; then
             fi
             sleep 0.05
         done
-    else
-        _wait=80  # force timeout, use current mode
     fi
     echo ""
 

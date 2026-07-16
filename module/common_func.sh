@@ -10,11 +10,7 @@ export TIEJIA_CONFIG_DIR=/data/adb/tricky_store
 export TIEJIA_VERSION=2.1.4
 export TIEJIA_VERSION_CODE=214
 
-# === PIF spoof settings (single source of truth) ===
-# Default set applied to every pif.prop (custom or shipped) before
-# Zygisk per-process injection. Tuned for minimum detection surface:
-# spoofProvider/Signature/VendingSdk off (high false-positive risk),
-# spoofBuild/Props/VendingFinger on (required for DEVICE verdict).
+# spoof settings shared across action.sh / service.sh
 export SPOOF_SETTINGS="spoofProvider=0 spoofVendingFinger=1 spoofBuild=1 spoofProps=1 spoofSignature=0 spoofVendingSdk=0"
 
 # === Portable lowercase (busybox awk lacks tolower) ===
@@ -541,9 +537,31 @@ config_migrate() {
 #===========================================================================
 # Usage: tj_log <level> <msg>
 # Levels: DEBUG INFO WARN ERROR (uppercase convention for logcat)
+# Thread-safe: uses mkdir as atomic lock for file writes.
 TJ_LOG_LEVEL="${TJ_LOG_LEVEL:-2}"  # 0=DEBUG 1=INFO 2=WARN 3=ERROR
+TJ_LOG_LOCK_DIR="${TMPDIR:-/data/local/tmp}/.tj_log_lock"
 
-tj_debug() { [ "$TJ_LOG_LEVEL" -le 0 ] && echo "[TieJia:D] $*" >&2; return 0; }
-tj_info()  { [ "$TJ_LOG_LEVEL" -le 1 ] && echo "[TieJia:I] $*" >&2; return 0; }
-tj_warn()  { [ "$TJ_LOG_LEVEL" -le 2 ] && echo "[TieJia:W] $*" >&2; return 0; }
-tj_error() { echo "[TieJia:E] $*" >&2; return 0; }
+_tj_log_write() {
+    local lvl="$1" ts msg; shift; msg="$*"
+    ts=$(date '+%m-%d %H:%M:%S' 2>/dev/null || echo "??-?? ??:??:??")
+    echo "[$ts] [$lvl] $msg" >&2
+    local lf="${MODDIR:-${MODPATH:-/data/adb/tricky_store}}/logs/tiejia.log"
+    # Atomic append via mkdir lock (POSIX-safe, no flock dependency)
+    local _i=0
+    while ! mkdir "$TJ_LOG_LOCK_DIR" 2>/dev/null; do
+        _i=$((_i + 1)); [ "$_i" -gt 50 ] && break; usleep 10000 2>/dev/null || sleep 0.01 2>/dev/null
+    done
+    if mkdir -p "$(dirname "$lf")" 2>/dev/null; then
+        echo "[$ts] [$lvl] $msg" >> "$lf" 2>/dev/null
+        # Rotate at 500 lines
+        if [ "$(wc -l < "$lf" 2>/dev/null)" -gt 500 ]; then
+            tail -n 300 "$lf" > "${lf}.tmp" 2>/dev/null && mv -f "${lf}.tmp" "$lf" 2>/dev/null
+        fi
+    fi
+    rmdir "$TJ_LOG_LOCK_DIR" 2>/dev/null
+}
+
+tj_debug() { [ "$TJ_LOG_LEVEL" -le 0 ] && _tj_log_write "D" "$@" || true; }
+tj_info()  { [ "$TJ_LOG_LEVEL" -le 1 ] && _tj_log_write "I" "$@" || true; }
+tj_warn()  { [ "$TJ_LOG_LEVEL" -le 2 ] && _tj_log_write "W" "$@" || true; }
+tj_error() { _tj_log_write "E" "$@"; }

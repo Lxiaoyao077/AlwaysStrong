@@ -82,7 +82,6 @@ for c in \
   cp_dir="/data/adb/modules/$c"
   if [ -d "$cp_dir" ] && [ "$(basename "$cp_dir")" != "$(basename "$MODPATH")" ]; then
     CONFLICTS=$((CONFLICTS+1))
-    [ -f "$cp_dir/uninstall.sh" ] && sh "$cp_dir/uninstall.sh" 2>/dev/null || true
     touch "$cp_dir/disable" "$cp_dir/remove"
     rm -rf "$cp_dir" 2>/dev/null
   fi
@@ -172,6 +171,71 @@ if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "webroot/index.html"; then
 else
   ui_print "warning: WebUI index.html missing from package"
 fi
+
+# --- ReZygisk (v1.0.0-522-bb9f0f9 CI, built-in) -------------------------
+REZYGISK_VER="v1.0.0-522-bb9f0f9"
+ui_print ""
+ui_print "ReZygisk $REZYGISK_VER (integrated)"
+
+# Detect 32/64-bit support (same logic as upstream ReZygisk customize.sh)
+CPU_ABIS_PROP1=$(getprop ro.system.product.cpu.abilist)
+CPU_ABIS_PROP2=$(getprop ro.product.cpu.abilist)
+if [ "${#CPU_ABIS_PROP2}" -gt "${#CPU_ABIS_PROP1}" ]; then
+  CPU_ABIS=$CPU_ABIS_PROP2
+else
+  CPU_ABIS=$CPU_ABIS_PROP1
+fi
+
+SUPPORTS_RZ32=false
+SUPPORTS_RZ64=false
+if [[ "$CPU_ABIS" == *"armeabi"* ]]; then
+  SUPPORTS_RZ32=true
+fi
+if [[ "$CPU_ABIS" == *"arm64-v8a"* ]]; then
+  SUPPORTS_RZ64=true
+fi
+
+# Extract ReZygisk daemon + ptrace (pre-extracted into package at build time)
+# Binaries are at module root: bin/zygiskd{32,64}, bin/zygisk-ptrace{32,64}
+# libs: lib/libzygisk.so (32-bit), lib64/libzygisk.so (64-bit)
+if [ "$SUPPORTS_RZ64" = true ]; then
+  install_file "bin/zygiskd64" "$MODPATH/bin"
+  chmod 755 "$MODPATH/bin/zygiskd64"
+  install_file "bin/zygisk-ptrace64" "$MODPATH/bin"
+  chmod 755 "$MODPATH/bin/zygisk-ptrace64"
+  install_file "lib64/libzygisk.so" "$MODPATH/lib64"
+  install_file "machikado.arm64" "$MODPATH"
+  ui_print "  arm64 binaries extracted"
+fi
+if [ "$SUPPORTS_RZ32" = true ]; then
+  install_file "bin/zygiskd32" "$MODPATH/bin"
+  chmod 755 "$MODPATH/bin/zygiskd32"
+  install_file "bin/zygisk-ptrace32" "$MODPATH/bin"
+  chmod 755 "$MODPATH/bin/zygisk-ptrace32"
+  install_file "lib/libzygisk.so" "$MODPATH/lib"
+  install_file "machikado.arm" "$MODPATH"
+  ui_print "  arm32 binaries extracted"
+fi
+
+# ReZygisk module.prop backup (used by post-fs-data.d to clean status)
+cp "$MODPATH/module.prop" "$MODPATH/module.prop.bak"
+
+# ReZygisk post-fs-data.d hook
+install_file "rezygisk_sh" "/data/adb/post-fs-data.d/rezygisk.sh"
+chmod 755 "/data/adb/post-fs-data.d/rezygisk.sh"
+mkdir -p /data/adb/post-mount.d
+cp "/data/adb/post-fs-data.d/rezygisk.sh" "/data/adb/post-mount.d/rezygisk.sh"
+
+# If Huawei Maple is enabled, disable it (conflicts with Zygisk)
+HUAWEI_MAPLE_ENABLED=$(grep_prop ro.maple.enable)
+if [ "$HUAWEI_MAPLE_ENABLED" = "1" ]; then
+  ui_print "  disabling Huawei Maple (ro.maple.enable=0)"
+  echo "ro.maple.enable=0" >> "$MODPATH/system.prop"
+fi
+
+set_perm_recursive "$MODPATH/bin" 0 0 0755 0755
+[ -d "$MODPATH/lib" ] && set_perm_recursive "$MODPATH/lib" 0 0 0755 0644 u:object_r:system_lib_file:s0
+[ -d "$MODPATH/lib64" ] && set_perm_recursive "$MODPATH/lib64" 0 0 0755 0644 u:object_r:system_lib_file:s0
 
 # --- /data/adb/tricky_store config ----------------------------------------
 mkdir -p "$CONFIG_DIR"

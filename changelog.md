@@ -1,3 +1,14 @@
+## v2.2.1
+
+- customize.sh: 移除执行冲突模块 uninstall.sh 的安全风险
+- action.sh: 移除工具函数区死代码
+- security_patch.sh: grep 精确匹配，避免子串误命中
+- pif_native_fetch.sh: $RANDOM bashism 改为 /dev/urandom
+- common_func.sh: 日志函数 mkdir 原子锁，避免竞态条件
+- service.sh: 函数化重构，提取 6 个命名函数
+- keybox_fetch.sh: 复用 detect_abi/find_busybox/find_tool 消除重复定义
+- build_target_txt.sh: 参数解析重写
+
 ## v2.1.1 (211)
 
 - 全面代码审计修复: 消除重复代码、补充边界条件、增强健壮性
