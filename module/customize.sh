@@ -1,12 +1,15 @@
 # shellcheck disable=SC2034
 SKIPUNZIP=1
 MIN_SDK=29
-init_config
 
-# Extract common_func.sh early so verify_proc_name is available for the
-# kill loop below. We re-extract it later with the rest of the scripts.
+# Define install_file early — must be available before any extraction
+install_file() { unzip -qqjo "$ZIPFILE" "$1" -d "$2" || abort "extract failed: $1"; }
+
+# Extract and source common_func.sh first so init_config is available
 install_file "common_func.sh" "$TMPDIR"
 . "$TMPDIR/common_func.sh"
+
+init_config
 
 if [ "$BOOTMODE" != true ]; then
   abort "install from a root manager, not recovery"
@@ -25,7 +28,6 @@ esac
 [ "$API" -lt "$MIN_SDK" ] && abort "needs Android 10+ (SDK $MIN_SDK)"
 
 VERSION=$(grep_prop version "${TMPDIR}/module.prop")
-install_file() { unzip -qqjo "$ZIPFILE" "$1" -d "$2" || abort "extract failed: $1"; }
 
 ui_print "TieJia $VERSION"
 ui_print "by @evokerr  -  t.me/keyboxstrong"
