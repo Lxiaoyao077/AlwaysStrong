@@ -221,7 +221,9 @@ fi
 cp "$MODPATH/module.prop" "$MODPATH/module.prop.bak"
 
 # ReZygisk post-fs-data.d hook
-install_file "rezygisk_sh" "/data/adb/post-fs-data.d/rezygisk.sh"
+mkdir -p /data/adb/post-fs-data.d
+install_file "rezygisk_sh" "/data/adb/post-fs-data.d"
+mv /data/adb/post-fs-data.d/rezygisk_sh /data/adb/post-fs-data.d/rezygisk.sh
 chmod 755 "/data/adb/post-fs-data.d/rezygisk.sh"
 mkdir -p /data/adb/post-mount.d
 cp "/data/adb/post-fs-data.d/rezygisk.sh" "/data/adb/post-mount.d/rezygisk.sh"
