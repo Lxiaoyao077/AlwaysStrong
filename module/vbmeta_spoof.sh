@@ -78,10 +78,7 @@ CS=$(device_get CRYPTO_STATE)
 [ -n "$CS" ] && set_prop ro.crypto.state "$CS"
 
 # ============================================================
-# 7. OEM unlock
-# sys.oem_unlock_allowed is gated by daemon_oem_unlock_hide config
-# (default 1) — see service.sh for the TEE conflict rationale.
-# ro.boot.oem_unlock_supported is harmless and always set.
+# 7. OEM unlock, gated by daemon_oem_unlock_hide (default 1)
 # ============================================================
 if config_get_bool "daemon_oem_unlock_hide" 1; then
     set_prop sys.oem_unlock_allowed           "0"
@@ -90,9 +87,7 @@ set_prop ro.boot.oem_unlock_supported         "0"
 
 # ============================================================
 # 8. Secure / ADB concealment
-# NOTE: Also set in service.sh Phase 1 (runs earlier). Kept here as
-# defensive fallback for daemon-managed hot reload scenarios where
-# Phase 1 has already completed.
+# same as service.sh Phase 1, for daemon reload path
 # ============================================================
 set_prop ro.secure                            "1"
 set_prop ro.adb.secure                        "1"
@@ -102,8 +97,7 @@ set_prop ro.force.debuggable                  "0"
 set_prop init.svc.adbd                        "stopped"
 
 # ============================================================
-# 9. Build type / tags hardening
-# NOTE: ro.build.type/ro.build.tags are written by prop_unify.sh
+# 9. Build type / tags (prop_unify.sh handles type/tags)
 # (→ pif.prop → Zygisk per-process). Skipped here to avoid duplicate
 # global resetprop and reduce "property modified" detection surface.
 # ============================================================

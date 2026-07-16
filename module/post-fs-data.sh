@@ -95,3 +95,43 @@ done
 if [ -x "$MODPATH/rom_spoof_block.sh" ]; then
     sh "$MODPATH/rom_spoof_block.sh" 2>/dev/null || true
 fi
+
+# --- ReZygisk early init -------------------------------------------------
+# Skip if Magisk built-in Zygisk is enabled (user chose stock Zygisk).
+if [ "$ZYGISK_ENABLED" ]; then
+  return 0
+fi
+
+# Manual trigger: fire post-fs-data.sh for all Zygisk modules.
+# This is needed because ReZygisk replaces Magisk's built-in Zygisk loader.
+if [ "$(which magisk)" ]; then
+  cd "$MODPATH"
+  for file in ../*; do
+    if [ -d "$file" ] && [ -d "$file/zygisk" ] && ! [ -f "$file/disable" ]; then
+      if [ -f "$file/post-fs-data.sh" ]; then
+        cd "$file"
+        log -p i -t "zygisk-sh" "Manually trigger post-fs-data.sh for $file"
+        sh "$(realpath ./post-fs-data.sh)"
+        cd "$MODPATH"
+      fi
+    fi
+  done
+fi
+
+# Create temp dir for ReZygisk runtime
+export TMP_PATH=/data/adb/rezygisk
+rm -rf "$TMP_PATH"
+mkdir -p "$TMP_PATH"
+chmod 555 "$TMP_PATH"
+chcon u:object_r:system_file:s0 "$TMP_PATH" 2>/dev/null
+
+# Run ReZygisk post-fs-data.d hook (resets module.prop status)
+[ -f /data/adb/post-fs-data.d/rezygisk.sh ] && sh /data/adb/post-fs-data.d/rezygisk.sh
+
+# Start ptrace monitor (64-bit takes priority, fall back to 32-bit)
+# Binaries are in TieJia's own bin/ dir
+if [ -x "$MODPATH/bin/zygisk-ptrace64" ]; then
+  "$MODPATH/bin/zygisk-ptrace64" monitor &
+elif [ -x "$MODPATH/bin/zygisk-ptrace32" ]; then
+  "$MODPATH/bin/zygisk-ptrace32" monitor &
+fi

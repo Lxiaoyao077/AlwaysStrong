@@ -36,9 +36,7 @@ for hook in persist.sys.pihooks.first_api_level persist.sys.pihooks.security_pat
     resetprop 2>/dev/null | grep -q "$hook" || set_persist "$hook" ""
 done
 
-# Hard-disable the known ROM spoof toggles. Values match what each engine's
-# source treats as "do nothing". Any future hook added by these engines that
-# we don't know about gets the persist-prop wipe below as a catch-all.
+# Hard-disable known ROM spoof toggles. Unknown hooks get wiped below.
 set_persist persist.sys.pihooks.disable.gms_props                true
 set_persist persist.sys.pihooks.disable.gms_key_attestation_block true
 set_persist persist.sys.entryhooks_enabled                       false

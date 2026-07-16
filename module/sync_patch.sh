@@ -89,9 +89,7 @@ for pf in "$CONFIG_DIR/custom.pif.prop"; do
     fi
 done
 
-# --- 3. real system props (boot only — needs resetprop) -------------------
-# Belt-and-suspenders for non-hooked readers (getprop, apps PIF doesn't hook).
-# Only touch props that already exist so we don't invent phantom ones.
+# 3. system props for apps PIF doesn't hook
 if [ "$MODE" = "boot" ] && command -v resetprop >/dev/null 2>&1; then
     for p in ro.build.version.security_patch \
              ro.vendor.build.security_patch \

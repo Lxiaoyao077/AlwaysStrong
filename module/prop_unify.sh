@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # prop_unify.sh — unify ro.product.* props with spoofed fingerprint — TieJia v2.1.0
 #
-# Reads device identity from device.conf (single source of truth) and applies
+# Apply device identity from device.conf, merge into pif.prop
 # all ro.product.* / ro.build.* props consistently. Also syncs to pif.prop
 # so the PIF Zygisk module stays in sync.
 

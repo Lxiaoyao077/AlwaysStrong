@@ -33,3 +33,10 @@ rm -f /data/adb/pif.prop
 rm -rf /data/adb/modules/playintegrityfix 2>/dev/null
 
 # Keep keybox.xml and security_patch.txt — user may want them for reinstall.
+
+# --- ReZygisk cleanup ---
+rm -rf /data/adb/rezygisk
+rm -f /data/adb/post-fs-data.d/rezygisk.sh
+rm -f /data/adb/post-mount.d/rezygisk.sh
+rmdir /data/adb/post-fs-data.d 2>/dev/null
+rmdir /data/adb/post-mount.d 2>/dev/null

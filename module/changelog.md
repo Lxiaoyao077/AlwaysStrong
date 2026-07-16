@@ -11,16 +11,13 @@ AIGC:
 
 # TieJia Changelog
 
-## v2.2.1 (2026-07-16)
-
-- customize.sh: 移除执行冲突模块 uninstall.sh 的安全风险
-- action.sh: 移除工具函数区死代码
-- security_patch.sh: grep 精确匹配，避免子串误命中
-- pif_native_fetch.sh: $RANDOM bashism 改为 /dev/urandom
-- common_func.sh: 日志函数 mkdir 原子锁，避免竞态条件
-- service.sh: 函数化重构，提取 6 个命名函数
-- keybox_fetch.sh: 复用 detect_abi/find_busybox/find_tool 消除重复定义
-- build_target_txt.sh: 参数解析重写
+## v2.1.0 (2026-07-16) — device.conf 统一配置 + vbmeta 完整伪装 + 热重载
+- **device.conf 统一配置**：单一数据源，pif_native_fetch.sh 同步写入，prop_unify.sh / vbmeta_spoof.sh 统一读取
+- **vbmeta_spoof.sh**：完整 VBMeta 属性伪装（verifiedbootstate / flash.locked / veritymode / vbmeta.digest / avb_version / crypto.state 等 12 类属性），替代旧的零散 vbmeta 代码
+- **touch-file 热重载**：`touch /data/adb/tricky_store/.reload` 即可触发 device.conf 重读并重新应用所有 props，无需重启
+- action.sh 两个菜单去除超时机制，改为无限等待
+- action.sh 延迟优化：getevent timeout 0.1s → 0.05s，sleep 0.1s → 0.05s
+- prop_unify.sh 重构为从 device.conf 读取，并同步回写 pif.prop
 
 ## v1.4.10 (2026-07-16) — 10-bug 安全健壮性热修复
 - P0: autopif4.sh find_busybox() 无限递归栈溢出修复
