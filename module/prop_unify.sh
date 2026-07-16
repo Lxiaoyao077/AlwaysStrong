@@ -79,6 +79,11 @@ log "device → brand=$BRAND product=$PRODUCT device=$DEVICE model=$MODEL"
 #   surface visible to all apps via getprop or /dev/__properties__ snapshots.
 # prop_mode=global: legacy mode - also write props globally via resetprop.
 PROP_MODE=$(config_get prop_mode zygisk_only)
+# Enum validation: typo'd or unknown values safely default to zygisk_only
+case "$PROP_MODE" in
+    zygisk_only|global) ;;
+    *) PROP_MODE="zygisk_only"; config_set prop_mode "$PROP_MODE" ;;
+esac
 log "prop_mode=$PROP_MODE"
 
 _apply_props() {
