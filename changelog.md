@@ -1,3 +1,9 @@
+## v2.3.2
+
+- 修复 ReZygisk 不启动：post-fs-data.sh 创建 `/data/adb/modules/rezygisk/module.prop`
+  - zygiskd64 daemon 遍历模块目录时需要 module.prop 来识别模块
+  - v2.3.1 仅创建了 symlink 但没有 module.prop，导致 rezygisk 被跳过
+
 ## v2.3.1
 
 - ReZygisk 真正集成：runtime symlink（不产生额外 Magisk 模块）
