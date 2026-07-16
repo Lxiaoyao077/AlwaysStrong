@@ -1,3 +1,13 @@
+## v2.3.3
+
+- 修复 ptrace 启动路径：改为通过 rezygisk symlink 路径启动
+  - /proc/self/exe 指向 rezygisk 目录后，ptrace 能正确找到 lib64/libzygisk.so
+
+## v2.3.3
+
+- 修复 ptrace 启动路径：改为通过 rezygisk symlink 路径启动
+  - /proc/self/exe 指向 rezygisk 目录后，ptrace 能正确找到 lib64/libzygisk.so
+
 ## v2.3.2
 
 - 修复 ReZygisk 不启动：post-fs-data.sh 创建 `/data/adb/modules/rezygisk/module.prop`
